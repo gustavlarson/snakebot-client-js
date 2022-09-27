@@ -1,5 +1,5 @@
 import { snakeConsole as console } from '../src/client';
-import { GameMap } from '../src/utils';
+import { Coordinate, GameMap } from '../src/utils';
 import { MessageType } from '../src/messages';
 import { GameSettings, Direction, RelativeDirection, TileType } from '../src/types';
 import type { GameStartingEventMessage, Message, SnakeDeadEventMessage } from '../src/types_messages';
@@ -10,6 +10,28 @@ const allDirections = Object.values(Direction); // [Direction.Up, Direction.Down
 function getRandomItem<T>(array: T[]): T {
   return array[Math.floor(Math.random() * array.length)];
 }
+
+const reachableTiles: (gameMap: GameMap, current: Coordinate) => number = (gameMap, current) => {
+  const visited: Coordinate[] = [];
+  const candidates: Coordinate[] = [current];
+  while (candidates.length > 0) {
+    //console.log(candidates);
+    const candidate = candidates.pop();
+    //console.log("candidate", candidate);
+    visited.push(candidate!);
+    for (const direction of allDirections) {
+      const translated = candidate!.translateByDirection(direction);
+      if (
+        visited.filter((coord) => coord.x === translated.x && coord.y === translated.y).length === 0 &&
+        translated.isWithinSquare({ x: 0, y: 0 }, { x: gameMap.width, y: gameMap.height }) &&
+        (gameMap.getTileType(translated) === TileType.Empty || gameMap.getTileType(translated) === TileType.Food)
+      ) {
+        candidates.push(translated);
+      }
+    }
+  }
+  return visited.length;
+};
 
 /**
  * This is where you write your AI code. You will be given a GameMap object containing the current state of the game.
@@ -26,18 +48,11 @@ export async function getNextMove(gameMap: GameMap): Promise<Direction> {
   }
 
   // Go toward food if it's nearby
-  for (const direction of possibleMoves) {
-    const nextPosition = myHeadPosition.translateByDirection(direction); // Gets the next position of the snake
-    if (gameMap.getTileType(nextPosition) === TileType.Food) {
-      return direction;
-    }
-  }
+  const moveScore = possibleMoves
+    .map((move) => ({ score: reachableTiles(gameMap, myHeadPosition), move: move }))
+    .sort((a, b) => a.score - b.score);
 
-  if (possibleMoves.includes(gameMap.playerSnake.relativeToAbsolute(RelativeDirection.Forward))) {
-    return gameMap.playerSnake.relativeToAbsolute(RelativeDirection.Forward);
-  }
-  // Otherwise, choose a random direction
-  return getRandomItem(possibleMoves);
+  return moveScore[0].move;
 }
 
 /**

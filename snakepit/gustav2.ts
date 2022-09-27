@@ -1,5 +1,5 @@
 import { snakeConsole as console } from '../src/client';
-import { GameMap } from '../src/utils';
+import { Coordinate, GameMap } from '../src/utils';
 import { MessageType } from '../src/messages';
 import { GameSettings, Direction, RelativeDirection, TileType } from '../src/types';
 import type { GameStartingEventMessage, Message, SnakeDeadEventMessage } from '../src/types_messages';
@@ -10,6 +10,27 @@ const allDirections = Object.values(Direction); // [Direction.Up, Direction.Down
 function getRandomItem<T>(array: T[]): T {
   return array[Math.floor(Math.random() * array.length)];
 }
+
+const reachableTiles: (gameMap: GameMap, move: Coordinate) => number = (gameMap, move) => {
+  const visited: Coordinate[] = [];
+  const candidates: Coordinate[] = [move];
+  while (candidates.length > 0) {
+    //console.log(candidates);
+    const candidate = candidates.pop();
+    visited.push(candidate!);
+    for (const direction of allDirections) {
+      const translated = candidate!.translateByDirection(direction);
+      if (
+        visited.filter((coord) => coord.x === translated.x && coord.y === translated.y).length === 0 &&
+        // !translated.isWithinSquare({ x: 0, y: 0 }, { x: gameMap.width, y: gameMap.height }) &&
+        gameMap.isTileFree(translated)
+      ) {
+        candidates.push(translated);
+      }
+    }
+  }
+  return visited.length;
+};
 
 /**
  * This is where you write your AI code. You will be given a GameMap object containing the current state of the game.
@@ -26,18 +47,24 @@ export async function getNextMove(gameMap: GameMap): Promise<Direction> {
   }
 
   // Go toward food if it's nearby
-  for (const direction of possibleMoves) {
-    const nextPosition = myHeadPosition.translateByDirection(direction); // Gets the next position of the snake
-    if (gameMap.getTileType(nextPosition) === TileType.Food) {
-      return direction;
-    }
-  }
+  console.log('possible moves', possibleMoves);
+  const moveScore = possibleMoves
+    .map((move) => {
+      console.log('Translated ', move, myHeadPosition.translateByDirection(move));
+      return { score: reachableTiles(gameMap, myHeadPosition.translateByDirection(move)), move: move };
+    })
+    .sort((a, b) => b.score - a.score);
 
-  if (possibleMoves.includes(gameMap.playerSnake.relativeToAbsolute(RelativeDirection.Forward))) {
-    return gameMap.playerSnake.relativeToAbsolute(RelativeDirection.Forward);
-  }
-  // Otherwise, choose a random direction
-  return getRandomItem(possibleMoves);
+  console.log('scores', moveScore);
+  const highScore = moveScore[0].score;
+  const highScores = moveScore.filter((score) => score.score === highScore);
+  /*if (highScore?.score === moveScore.at(1)?.score) {
+    const list = [moveScore.at(0), moveScore.at(1)];
+    return getRandomItem(list)!.move;
+  }*/
+
+  //return getRandomItem(highScores).move;
+  return highScores[0].move;
 }
 
 /**

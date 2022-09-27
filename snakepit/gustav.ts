@@ -25,19 +25,14 @@ export async function getNextMove(gameMap: GameMap): Promise<Direction> {
     return Direction.Down;
   }
 
-  // Go toward food if it's nearby
-  for (const direction of possibleMoves) {
-    const nextPosition = myHeadPosition.translateByDirection(direction); // Gets the next position of the snake
-    if (gameMap.getTileType(nextPosition) === TileType.Food) {
-      return direction;
-    }
+  const snake = gameMap.playerSnake;
+  if (possibleMoves.includes(snake.relativeToAbsolute(RelativeDirection.Forward))) {
+    return snake.relativeToAbsolute(RelativeDirection.Forward);
+  } else if (possibleMoves.includes(snake.relativeToAbsolute(RelativeDirection.Right))) {
+    return snake.relativeToAbsolute(RelativeDirection.Right);
+  } else {
+    return snake.relativeToAbsolute(RelativeDirection.Left);
   }
-
-  if (possibleMoves.includes(gameMap.playerSnake.relativeToAbsolute(RelativeDirection.Forward))) {
-    return gameMap.playerSnake.relativeToAbsolute(RelativeDirection.Forward);
-  }
-  // Otherwise, choose a random direction
-  return getRandomItem(possibleMoves);
 }
 
 /**
