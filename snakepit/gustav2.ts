@@ -46,7 +46,6 @@ export async function getNextMove(gameMap: GameMap): Promise<Direction> {
     return Direction.Down;
   }
 
-  // Go toward food if it's nearby
   console.log('possible moves', possibleMoves);
   const moveScore = possibleMoves
     .map((move) => {
@@ -58,13 +57,41 @@ export async function getNextMove(gameMap: GameMap): Promise<Direction> {
   console.log('scores', moveScore);
   const highScore = moveScore[0].score;
   const highScores = moveScore.filter((score) => score.score === highScore);
+
+  if (moveScore.length !== highScores.length) {
+    return highScores[0].move;
+  }
+
+  // All options contains the same open area
   /*if (highScore?.score === moveScore.at(1)?.score) {
     const list = [moveScore.at(0), moveScore.at(1)];
     return getRandomItem(list)!.move;
   }*/
 
-  //return getRandomItem(highScores).move;
-  return highScores[0].move;
+  for (const [id, snake] of gameMap.snakes.entries()) {
+    if (id === gameMap.playerId) {
+      continue;
+    }
+    const delta = gameMap.playerSnake.headCoordinate.deltaTo(snake.tailCoordinate);
+    if (delta.x > 0 && possibleMoves.includes(Direction.Down)) {
+      console.log(`Hunting ${id}`);
+      return Direction.Down;
+    } else if (delta.x < 0 && possibleMoves.includes(Direction.Up)) {
+      console.log(`Hunting ${id}`);
+      return Direction.Up;
+    }
+
+    if (delta.y > 0 && possibleMoves.includes(Direction.Right)) {
+      console.log(`Hunting ${id}`);
+      return Direction.Right;
+    } else if (delta.y < 0 && possibleMoves.includes(Direction.Left)) {
+      console.log(`Hunting ${id}`);
+      return Direction.Left;
+    }
+  }
+
+  return getRandomItem(highScores).move;
+  //return highScores[0].move;
 }
 
 /**

@@ -11,7 +11,7 @@ function getRandomItem<T>(array: T[]): T {
   return array[Math.floor(Math.random() * array.length)];
 }
 
-const reachableTiles: (gameMap: GameMap, move: Coordinate) => number = (gameMap, move) => {
+const calculateScore: (gameMap: GameMap, move: Coordinate, score: number) => number = (gameMap, move, score) => {
   const visited: Coordinate[] = [];
   const candidates: Coordinate[] = [move];
   while (candidates.length > 0) {
@@ -23,14 +23,30 @@ const reachableTiles: (gameMap: GameMap, move: Coordinate) => number = (gameMap,
       const translated = candidate!.translateByDirection(direction);
       if (
         visited.filter((coord) => coord.x === translated.x && coord.y === translated.y).length === 0 &&
-        translated.isWithinSquare({ x: 0, y: 0 }, { x: gameMap.width, y: gameMap.height }) &&
-        (gameMap.getTileType(translated) === TileType.Empty || gameMap.getTileType(translated) === TileType.Food)
+        translated.isWithinSquare({ x: 0, y: 0 }, { x: gameMap.width, y: gameMap.height })
       ) {
+        if (gameMap.getTileType(translated) === TileType.Empty) {
+          score = score + 1;
+        }
+        if (gameMap.getTileType(translated) === TileType.Food) {
+          score = score + 10;
+        }
         candidates.push(translated);
       }
     }
   }
+
   return visited.length;
+};
+
+const goTo: (gameMap: GameMap) => Coordinate = (gameMap) => {
+  //Attempt to find the largest circle without any snakes:
+  for (const tile of gameMap.tiles) {
+    console.log(tile);
+    //TODO
+  }
+
+  return new Coordinate(0, 0);
 };
 
 export async function getNextMove(gameMap: GameMap): Promise<Direction> {
@@ -46,9 +62,10 @@ export async function getNextMove(gameMap: GameMap): Promise<Direction> {
 
   // Avoid going
   const moveScore = possibleMoves
-    .map((move) => ({ score: reachableTiles(gameMap, myHeadPosition.translateByDirection(move)), move: move }))
+    .map((move) => ({ score: calculateScore(gameMap, myHeadPosition.translateByDirection(move)), move: move }))
     .sort((a, b) => b.score - a.score);
   console.log('scores', moveScore);
+  goTo(gameMap);
 
   return moveScore[0].move;
 }

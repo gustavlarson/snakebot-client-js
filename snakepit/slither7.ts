@@ -33,9 +33,61 @@ const reachableTiles: (gameMap: GameMap, move: Coordinate) => number = (gameMap,
   return visited.length;
 };
 
-export async function getNextMove(gameMap: GameMap): Promise<Direction> {
-  // Coordinate of my snake's head
+const scoreDirection: (gameMap: GameMap, direction: Direction, snakeHeads: Coordinate[]) => number = (
+  gameMap,
+  direction,
+  snakeHeads,
+) => {
   const myHeadPosition = gameMap.playerSnake.headCoordinate;
+  const nextCoordinate = myHeadPosition.translateByDirection(direction);
+
+  let score = reachableTiles(gameMap, nextCoordinate);
+
+  snakeHeads.forEach((snakeHead) => {
+    if (snakeHead !== undefined) {
+      const distance = nextCoordinate.euclidianDistanceTo(snakeHead);
+      if (distance < 5) {
+        score = score - (5 - distance) * 100;
+      }
+    }
+  });
+
+  // Look ahead one step
+  switch (gameMap.getTileType(nextCoordinate.translateByDirection(direction))) {
+    case TileType.Food:
+      score = score + 100;
+      break;
+  }
+  // Look ahead two steps
+  switch (gameMap.getTileType(nextCoordinate.translateByDirection(direction))) {
+    case TileType.Food:
+      score = score + 10;
+      break;
+    case TileType.Obstacle:
+      score = score - 10;
+      break;
+    case TileType.Snake:
+      score = score - 100;
+      break;
+  }
+
+  // Look ahead three steps
+  switch (gameMap.getTileType(nextCoordinate.translateByDirection(direction).translateByDirection(direction))) {
+    case TileType.Food:
+      score = score + 1;
+      break;
+    case TileType.Obstacle:
+      score = score - 1;
+      break;
+    case TileType.Snake:
+      score = score - 10;
+      break;
+  }
+
+  return score;
+};
+
+export async function getNextMove(gameMap: GameMap): Promise<Direction> {
   //Filters safe directions to move in
   const possibleMoves = allDirections.filter((direction) => gameMap.playerSnake.canMoveInDirection(direction));
 
@@ -44,13 +96,24 @@ export async function getNextMove(gameMap: GameMap): Promise<Direction> {
     return Direction.Down;
   }
 
+  const snakeHeads: Coordinate[] = [];
+  gameMap.snakes.forEach((snake) => {
+    if (snake.coordinates !== undefined) {
+      if (snake.id !== gameMap.playerId) {
+        snakeHeads.push(snake.headCoordinate);
+      }
+    }
+  });
   // Avoid going
   const moveScore = possibleMoves
-    .map((move) => ({ score: reachableTiles(gameMap, myHeadPosition.translateByDirection(move)), move: move }))
+    .sort(function (a, b) {
+      return 0.5 - Math.random();
+    })
+    .map((direction) => ({ score: scoreDirection(gameMap, direction, snakeHeads), direction }))
     .sort((a, b) => b.score - a.score);
   console.log('scores', moveScore);
 
-  return moveScore[0].move;
+  return moveScore[0].direction;
 }
 
 /**

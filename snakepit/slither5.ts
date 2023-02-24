@@ -33,9 +33,48 @@ const reachableTiles: (gameMap: GameMap, move: Coordinate) => number = (gameMap,
   return visited.length;
 };
 
-export async function getNextMove(gameMap: GameMap): Promise<Direction> {
-  // Coordinate of my snake's head
+const scoreDirection: (gameMap: GameMap, direction: Direction) => number = (gameMap, direction) => {
   const myHeadPosition = gameMap.playerSnake.headCoordinate;
+  const nextCoordinate = myHeadPosition.translateByDirection(direction);
+
+  let score = reachableTiles(gameMap, nextCoordinate);
+
+  // Look ahead one step
+  switch (gameMap.getTileType(nextCoordinate.translateByDirection(direction))) {
+    case TileType.Food:
+      score = score + 100;
+      break;
+  }
+  // Look ahead two steps
+  switch (gameMap.getTileType(nextCoordinate.translateByDirection(direction))) {
+    case TileType.Food:
+      score = score + 10;
+      break;
+    case TileType.Obstacle:
+      score = score - 10;
+      break;
+    case TileType.Snake:
+      score = score - 100;
+      break;
+  }
+
+  // Look ahead three steps
+  switch (gameMap.getTileType(nextCoordinate.translateByDirection(direction).translateByDirection(direction))) {
+    case TileType.Food:
+      score = score + 1;
+      break;
+    case TileType.Obstacle:
+      score = score - 1;
+      break;
+    case TileType.Snake:
+      score = score - 10;
+      break;
+  }
+
+  return score;
+};
+
+export async function getNextMove(gameMap: GameMap): Promise<Direction> {
   //Filters safe directions to move in
   const possibleMoves = allDirections.filter((direction) => gameMap.playerSnake.canMoveInDirection(direction));
 
@@ -46,11 +85,11 @@ export async function getNextMove(gameMap: GameMap): Promise<Direction> {
 
   // Avoid going
   const moveScore = possibleMoves
-    .map((move) => ({ score: reachableTiles(gameMap, myHeadPosition.translateByDirection(move)), move: move }))
+    .map((direction) => ({ score: scoreDirection(gameMap, direction), direction }))
     .sort((a, b) => b.score - a.score);
   console.log('scores', moveScore);
 
-  return moveScore[0].move;
+  return moveScore[0].direction;
 }
 
 /**
