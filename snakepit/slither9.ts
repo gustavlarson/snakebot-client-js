@@ -1,12 +1,13 @@
 import { snakeConsole as console } from '../src/client';
-import { Coordinate, GameMap } from '../src/utils';
+import { Coordinate, GameMap, Snake } from '../src/utils';
 import { MessageType } from '../src/messages';
 import { GameSettings, Direction, TileType } from '../src/types';
 import type { GameStartingEventMessage, Message, SnakeDeadEventMessage } from '../src/types_messages';
+import { performance } from 'perf_hooks';
 
 const allDirections = Object.values(Direction);
 
-const reachableTiles: (gameMap: GameMap, move: Coordinate) => number = (gameMap, move) => {
+const reachableTiles: (gameMap: GameMap, move: Coordinate, limit: number) => number = (gameMap, move, limit) => {
   const visited: Coordinate[] = [];
   const candidates: Coordinate[] = [move];
   while (candidates.length > 0) {
@@ -24,31 +25,53 @@ const reachableTiles: (gameMap: GameMap, move: Coordinate) => number = (gameMap,
         candidates.push(translated);
       }
     }
+    if (visited.length > limit) {
+      return limit;
+    }
   }
   return visited.length;
 };
 
-const scoreDirection: (gameMap: GameMap, direction: Direction, snakeHeads: Coordinate[]) => number = (
+const calculateAvailableTiles: (gameMap: GameMap) => number = (gameMap) => {
+  const totalTiles = gameMap.width * gameMap.height;
+  return totalTiles - gameMap.occupiedTiles;
+};
+
+const scoreDirection: (gameMap: GameMap, direction: Direction, opponents: Snake[]) => number = (
   gameMap,
   direction,
-  snakeHeads,
+  opponents,
 ) => {
   const myHeadPosition = gameMap.playerSnake.headCoordinate;
   const nextCoordinate = myHeadPosition.translateByDirection(direction);
+  const availableTiles = calculateAvailableTiles(gameMap);
 
-  let score = reachableTiles(gameMap, nextCoordinate);
+  let score = reachableTiles(gameMap, nextCoordinate, availableTiles * 0.6);
 
-  snakeHeads.forEach((snakeHead) => {
-    if (snakeHead !== undefined) {
-      const distance = nextCoordinate.euclidianDistanceTo(snakeHead);
+  // Adjust score if we have other snakes close by
+  opponents.forEach((opponent) => {
+    if (opponent.headCoordinate !== undefined) {
+      const distance = nextCoordinate.euclidianDistanceTo(opponent.headCoordinate);
       if (distance < 5) {
         score = score - (5 - distance) * 100;
       }
     }
   });
 
-  // Look ahead one step
-  switch (gameMap.getTileType(nextCoordinate.translateByDirection(direction))) {
+  // Adjust score if we can corner a opponent
+  opponents.forEach((opponent) => {
+    if (opponent.headCoordinate !== undefined) {
+      const nextOpponentPosition = opponent.headCoordinate.translateByDirection(
+        allDirections.find((direction) => opponent.canMoveInDirection(direction)) ?? Direction.Down,
+      );
+      const tiles = reachableTiles(gameMap, nextOpponentPosition, 100);
+      if (tiles < 100) {
+        score = score + 100 - tiles;
+      }
+    }
+  });
+
+  switch (gameMap.getTileType(nextCoordinate)) {
     case TileType.Food:
       score = score + 100;
       break;
@@ -83,6 +106,7 @@ const scoreDirection: (gameMap: GameMap, direction: Direction, snakeHeads: Coord
 };
 
 export async function getNextMove(gameMap: GameMap): Promise<Direction> {
+  const startTime = performance.now();
   //Filters safe directions to move in
   let possibleMoves = allDirections.filter((direction) => gameMap.playerSnake.canMoveInDirection(direction));
 
@@ -91,24 +115,27 @@ export async function getNextMove(gameMap: GameMap): Promise<Direction> {
     return Direction.Down;
   }
 
-  const snakeHeads: Coordinate[] = [];
+  const opponents: Snake[] = [];
   gameMap.snakes.forEach((snake) => {
-    if (snake.coordinates !== undefined) {
-      if (snake.id !== gameMap.playerId) {
-        snakeHeads.push(snake.headCoordinate);
-      }
+    if (snake.headCoordinate !== undefined && snake.id !== gameMap.playerId) {
+      opponents.push(snake);
     }
   });
-  if (snakeHeads.length > 2) {
+
+  // Act more random if we have more than two opponents
+  if (opponents.length > 2) {
     possibleMoves = possibleMoves.sort(function (a, b) {
       return 0.5 - Math.random();
     });
   }
-  const moveScore = possibleMoves
 
-    .map((direction) => ({ score: scoreDirection(gameMap, direction, snakeHeads), direction }))
+  const moveScore = possibleMoves
+    .map((direction) => ({ score: scoreDirection(gameMap, direction, opponents), direction }))
     .sort((a, b) => b.score - a.score);
-  //console.log('scores', moveScore);
+  console.log('scores', moveScore);
+
+  const endTime = performance.now();
+  console.log('computation time: ', endTime - startTime);
 
   return moveScore[0].direction;
 }
@@ -129,6 +156,6 @@ export function onMessage(message: Message) {
 export const trainingGameSettings = {} as GameSettings;
 
 //TODO:
-// - Optimisation: stop counting reachable tiles after > half board is reachable
 // - Calculate reachable tiles for opponent
 // Score each tile depending on if it can be reached by opponent
+// TODO scoring adjustment should be a percentage, not a fixed number

@@ -1,5 +1,5 @@
-import { Direction, RawMap, RelativeDirection, SnakeInfo, TileType } from "./types";
-import { GameSettings } from "./types";
+import { Direction, RawMap, RelativeDirection, SnakeInfo, TileType } from './types';
+import { GameSettings } from './types';
 
 /**
  * Converts a direction to a representation in coordinates.
@@ -249,7 +249,7 @@ export class Snake {
 
   static fromSnakeInfo(snakeInfo: SnakeInfo, mapWidth: number, map: GameMap) {
     const { id, name, positions } = snakeInfo;
-    const coordinates = positions.map(position => Coordinate.fromPosition(position, mapWidth));
+    const coordinates = positions.map((position) => Coordinate.fromPosition(position, mapWidth));
     // Calculate the direction of the snake
     let direction = Direction.Up;
     if (coordinates.length > 1) {
@@ -276,10 +276,12 @@ export class GameMap {
   tiles: Map<number, TileType>;
   gameSettings: GameSettings;
   gameTick: number;
+  occupiedTiles: number;
 
   constructor(map: RawMap, playerId: string, gameSettings: GameSettings, gameTick: number) {
     const snakes = new Map<string, Snake>();
     const tiles = new Map<number, TileType>();
+    let occupiedTiles = 0;
 
     for (const foodPosition of map.foodPositions) {
       tiles.set(foodPosition, TileType.Food);
@@ -287,6 +289,7 @@ export class GameMap {
 
     for (const obstaclePosition of map.obstaclePositions) {
       tiles.set(obstaclePosition, TileType.Obstacle);
+      occupiedTiles++;
     }
 
     for (const snakeInfo of map.snakeInfos) {
@@ -294,6 +297,7 @@ export class GameMap {
       snakes.set(snakeInfo.id, snake);
       for (const snakePosition of snakeInfo.positions) {
         tiles.set(snakePosition, TileType.Snake);
+        occupiedTiles++;
       }
     }
 
@@ -304,6 +308,7 @@ export class GameMap {
     this.tiles = tiles;
     this.gameSettings = gameSettings;
     this.gameTick = gameTick;
+    this.occupiedTiles = occupiedTiles;
   }
 
   get playerSnake() {
