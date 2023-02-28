@@ -20,7 +20,7 @@
   "browser": "src/index.js",
   "scripts": {
     "lint": "eslint .",
-    "test": "ts-mocha -p ./tsconfig.json test/utils.ts ",
+    "test": "ts-mocha -p ./tsconfig.json test/utils.ts test/bot.ts",
     "start": "ts-node snake-cli.ts"
   },
   "dependencies": {

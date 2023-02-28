@@ -23,19 +23,21 @@ const calculateScore: (gameMap: GameMap, move: Coordinate, score: number) => num
       const translated = candidate!.translateByDirection(direction);
       if (
         visited.filter((coord) => coord.x === translated.x && coord.y === translated.y).length === 0 &&
-        translated.isWithinSquare({ x: 0, y: 0 }, { x: gameMap.width, y: gameMap.height })
-      ) {
-        if (gameMap.getTileType(translated) === TileType.Empty) {
-          score = score + 1;
+        translated.isWithinSquare({ x: 0, y: 0 }, { x: gameMap.width, y: gameMap.height })) {
+           if 
+        (gameMap.getTileType(translated) === TileType.Empty) {
+
         }
         if (gameMap.getTileType(translated) === TileType.Food) {
-          score = score + 10;
+
         }
+        }
+
         candidates.push(translated);
       }
+      
     }
   }
-
   return visited.length;
 };
 

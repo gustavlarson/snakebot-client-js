@@ -27,6 +27,8 @@ const reachableTiles: (
       ) {
         if (!extraOccupiedTiles.includes(translated)) {
           candidates.push(translated);
+        } else {
+          console.log('GSUTAV', translated);
         }
       }
     }
@@ -44,7 +46,7 @@ const calculateAvailableTiles: (gameMap: GameMap) => number = (gameMap) => {
 
 const FOOD_FACTOR = 1.2;
 const OBSTACLE_FACTOR = 0.9;
-const SNAKE_FACTOR = 0.8;
+const SNAKE_FACTOR = 0.85;
 
 const NEXT_TICK_FACTOR = 0.5;
 
@@ -118,15 +120,22 @@ const scoreDirection: (gameMap: GameMap, direction: Direction, opponents: Snake[
   score += nextStepReachable;
 
   // Adjust score if we can corner a opponent in two steps
+
   opponents.forEach((opponent) => {
     if (opponent.headCoordinate !== undefined) {
       const opponentDirection =
         allDirections.find((direction) => opponent.canMoveInDirection(direction)) ?? Direction.Down;
       const nextOpponentPosition = opponent.headCoordinate.translateByDirection(opponentDirection);
-      const tiles = reachableTiles(gameMap, nextOpponentPosition.translateByDirection(direction), 200, [
+      console.log('opponent', opponent.name);
+      console.log('positions', nextCoordinate, nextCoordinate.translateByDirection(direction), nextOpponentPosition);
+      const tiles = reachableTiles(gameMap, nextOpponentPosition.translateByDirection(opponentDirection), 2000, [
+        myHeadPosition,
         nextCoordinate,
+        nextCoordinate.translateByDirection(direction),
+        nextCoordinate.translateByDirection(direction).translateByDirection(direction),
         nextOpponentPosition,
       ]);
+      console.log(tiles);
       if (tiles < 200) {
         const factor = 1 + 200 / tiles / 100;
         console.log('cornering possible in two steps, adjusting by', factor);
