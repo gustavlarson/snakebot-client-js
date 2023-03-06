@@ -343,4 +343,106 @@ export class GameMap {
   isTileFree(coordinate: Coordinate) {
     return this.getTileType(coordinate) === TileType.Empty || this.getTileType(coordinate) === TileType.Food;
   }
+
+  clone(): GameMap {
+    return new GameMapClone(
+      this.playerId,
+      this.width,
+      this.height,
+      this.snakes,
+      this.tiles,
+      this.gameSettings,
+      this.gameTick,
+      this.occupiedTiles,
+    );
+  }
+
+  setPlayerSnakeHead(coordinate: Coordinate) {
+    console.log('SETTING SNAKE HEAD TO', coordinate);
+    this.tiles.set(coordinate.toPosition(this.width, this.height), TileType.Snake);
+    this.playerSnake.coordinates = [coordinate, ...this.playerSnake.coordinates];
+  }
+}
+
+//THIS IS UGLY!!!
+export class GameMapClone {
+  playerId: string;
+  width: number;
+  height: number;
+  snakes: Map<string, Snake>;
+  tiles: Map<number, TileType>;
+  gameSettings: GameSettings;
+  gameTick: number;
+  occupiedTiles: number;
+
+  constructor(
+    playerId: string,
+    width: number,
+    height: number,
+    snakes: Map<string, Snake>,
+    tiles: Map<number, TileType>,
+    gameSettings: GameSettings,
+    gameTick: number,
+    occupiedTiles: number,
+  ) {
+    this.playerId = playerId;
+    this.width = width;
+    this.height = height;
+    this.snakes = new Map(snakes);
+    this.tiles = new Map(tiles);
+    this.gameSettings = gameSettings;
+    this.gameTick = gameTick;
+    this.occupiedTiles = occupiedTiles;
+  }
+
+  get playerSnake() {
+    return this.snakes.get(this.playerId)!;
+  }
+
+  /**
+   * @param coordinate Coordinate to check
+   * @return Type of tile
+   */
+  getTileType(coordinate: Coordinate) {
+    const { width, height } = this;
+
+    if (coordinate.isOutOfBounds(width, height)) {
+      return TileType.Obstacle;
+    }
+
+    const position = coordinate.toPosition(width, height);
+    const tileType = this.tiles.get(position);
+
+    if (tileType === undefined) {
+      // console.error(`No tile found at position ${position}`);
+      return TileType.Empty;
+    }
+
+    return tileType;
+  }
+  /**
+   * @param coordinate Coordinate to check
+   * @return True if coordinate is empty or food
+   */
+  isTileFree(coordinate: Coordinate) {
+    return this.getTileType(coordinate) === TileType.Empty || this.getTileType(coordinate) === TileType.Food;
+  }
+
+  clone(): GameMap {
+    return new GameMapClone(
+      this.playerId,
+      this.width,
+      this.height,
+      this.snakes,
+      this.tiles,
+      this.gameSettings,
+      this.gameTick,
+      this.occupiedTiles,
+    );
+  }
+
+  setPlayerSnakeHead(coordinate: Coordinate) {
+    this.tiles.set(coordinate.toPosition(this.width, this.height), TileType.Snake);
+    this.playerSnake.coordinates = [coordinate, ...this.playerSnake.coordinates];
+  }
 }

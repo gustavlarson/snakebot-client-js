@@ -7,36 +7,31 @@ import { performance } from 'perf_hooks';
 
 const allDirections = Object.values(Direction);
 
-const reachableTiles: (
-  gameMap: GameMap,
-  move: Coordinate,
-  limit: number,
-  extraOccupiedTiles: Coordinate[],
-) => number = (gameMap, move, limit, extraOccupiedTiles) => {
-  const visited: Coordinate[] = [];
+export const reachableTiles: (gameMap: GameMap, move: Coordinate, limit: number) => number = (gameMap, move, limit) => {
+  if (move.isOutOfBounds(gameMap.width, gameMap.height)) {
+    return 0;
+  }
+
+  const visited: Set<number> = new Set();
   const candidates: Coordinate[] = [move];
   while (candidates.length > 0) {
     const candidate = candidates.pop();
-    visited.push(candidate!);
+    visited.add(candidate!.toPosition(gameMap.width, gameMap.height));
     for (const direction of allDirections) {
       const translated = candidate!.translateByDirection(direction);
       if (
-        visited.filter((coord) => coord.x === translated.x && coord.y === translated.y).length === 0 &&
-        translated.isWithinSquare({ x: 0, y: 0 }, { x: gameMap.width, y: gameMap.height }) &&
+        !translated.isOutOfBounds(gameMap.width, gameMap.height) &&
+        !visited.has(translated.toPosition(gameMap.width, gameMap.height)) &&
         (gameMap.getTileType(translated) === TileType.Empty || gameMap.getTileType(translated) === TileType.Food)
       ) {
-        if (!extraOccupiedTiles.includes(translated)) {
-          candidates.push(translated);
-        } else {
-          console.log('GSUTAV', translated);
-        }
+        candidates.push(translated);
       }
     }
-    if (visited.length > limit) {
+    if (visited.size > limit) {
       return limit;
     }
   }
-  return visited.length;
+  return visited.size;
 };
 
 const calculateAvailableTiles: (gameMap: GameMap) => number = (gameMap) => {
@@ -50,114 +45,88 @@ const SNAKE_FACTOR = 0.85;
 
 const NEXT_TICK_FACTOR = 0.5;
 
-const adjust = (factor: number, ticks: number) => {
-  return 1 + (factor - 1) * (NEXT_TICK_FACTOR * (ticks - 1));
+const MAX_DEPTH = 3;
+
+const log = (prefix: string, msg: any, ...arg: any[]) => {
+  console.log(`${prefix} ${msg}`, arg);
 };
 
-const scoreDirection: (gameMap: GameMap, direction: Direction, opponents: Snake[]) => number = (
-  gameMap,
-  direction,
-  opponents,
-) => {
+const scoreDirection: (
+  gameMap: GameMap,
+  direction: Direction,
+  opponents: Snake[],
+  depth: number,
+  prefix: string,
+) => number = (gameMap, direction, opponents, depth, prefix = '') => {
+  if (depth > MAX_DEPTH) {
+    return 0;
+  }
+
   const myHeadPosition = gameMap.playerSnake.headCoordinate;
   const nextCoordinate = myHeadPosition.translateByDirection(direction);
-  const availableTiles = calculateAvailableTiles(gameMap);
+  console.log('Current coordinate, next coordinate', myHeadPosition, nextCoordinate);
 
-  let score = reachableTiles(gameMap, nextCoordinate, availableTiles * 0.6, []);
-  console.log('base score', direction, score);
+  if (nextCoordinate.isOutOfBounds(gameMap.width, gameMap.height)) {
+    log(prefix, 'out of bounds', nextCoordinate);
+    return 0;
+  }
+  const availableTiles = calculateAvailableTiles(gameMap);
+  console.log('available', availableTiles);
+
+  let score = reachableTiles(gameMap, nextCoordinate, availableTiles / 2);
+  log(prefix, 'base score', direction, nextCoordinate, score);
+
+  // Adjust score if we have food on the tile
+  if (gameMap.getTileType(nextCoordinate) === TileType.Food) {
+    log(prefix, 'food on tile, adjusting by ', FOOD_FACTOR);
+    score = score * FOOD_FACTOR;
+  }
+  // Two steps ahead
+  const twoAhead = gameMap.getTileType(nextCoordinate.translateByDirection(direction));
+  if (twoAhead === TileType.Obstacle) {
+    log(prefix, 'obstacle two steps ahead, adjusting by ', OBSTACLE_FACTOR);
+    score = score * OBSTACLE_FACTOR;
+  } else if (twoAhead === TileType.Snake) {
+    log(prefix, 'snake two steps ahead, adjusting by ', SNAKE_FACTOR);
+    score = score * SNAKE_FACTOR;
+  }
 
   // Adjust score if we have other snakes close by
   opponents.forEach((opponent) => {
     const distance = nextCoordinate.euclidianDistanceTo(opponent.headCoordinate);
     if (distance < 5) {
       const factor = distance / 5;
-      console.log('head close by, adjusting by factor', factor);
+      log(prefix, 'head close by, adjusting by factor', factor);
       score = score * factor;
     }
   });
+
+  // Predict how the next state of the gamemap will look
+  const nextGameMap = gameMap.clone();
+  nextGameMap.setPlayerSnakeHead(nextCoordinate);
 
   // Adjust score if we can corner a opponent
   opponents.forEach((opponent) => {
     const opponentDirection =
       allDirections.find((direction) => opponent.canMoveInDirection(direction)) ?? Direction.Down;
     const nextOpponentPosition = opponent.headCoordinate.translateByDirection(opponentDirection);
-    const tiles = reachableTiles(gameMap, nextOpponentPosition, 200, [nextCoordinate]);
+
+    const tiles = reachableTiles(nextGameMap, nextOpponentPosition, 200);
     if (tiles < 200) {
       const factor = 1 + 200 / tiles / 50;
-      console.log('cornering possible, adjusting by', factor);
+      log(prefix, 'cornering possible, adjusting by', factor);
       score = score * factor;
     }
   });
 
-  switch (gameMap.getTileType(nextCoordinate)) {
-    case TileType.Food:
-      console.log('food in next tile, adjusting by ', FOOD_FACTOR);
-      score = score * FOOD_FACTOR;
-      break;
-  }
+  const possibleNextMoves = allDirections.filter((direction) => nextGameMap.playerSnake.canMoveInDirection(direction));
 
-  // Look ahead two steps
-  switch (gameMap.getTileType(nextCoordinate.translateByDirection(direction))) {
-    case TileType.Food:
-      console.log('food close by, adjusting by ', adjust(FOOD_FACTOR, 2));
-      score = score * adjust(FOOD_FACTOR, 2);
-      break;
-    case TileType.Obstacle:
-      console.log('obstacle close by, adjusting by ', adjust(OBSTACLE_FACTOR, 2));
-      score = score * adjust(OBSTACLE_FACTOR, 2);
-      break;
-    case TileType.Snake:
-      console.log('snake close by, adjusting by ', adjust(SNAKE_FACTOR, 2));
-      score = score * adjust(SNAKE_FACTOR, 2);
-      break;
-  }
-
-  // Adjust score based on reachable tiles in next step
-  const nextStepReachable =
-    reachableTiles(gameMap, nextCoordinate.translateByDirection(direction), availableTiles * 0.6, [nextCoordinate]) *
-    0.01;
-  console.log('Adjusting score based on available tiles in next step', nextStepReachable);
-  score += nextStepReachable;
-
-  // Adjust score if we can corner a opponent in two steps
-
-  opponents.forEach((opponent) => {
-    if (opponent.headCoordinate !== undefined) {
-      const opponentDirection =
-        allDirections.find((direction) => opponent.canMoveInDirection(direction)) ?? Direction.Down;
-      const nextOpponentPosition = opponent.headCoordinate.translateByDirection(opponentDirection);
-      console.log('opponent', opponent.name);
-      console.log('positions', nextCoordinate, nextCoordinate.translateByDirection(direction), nextOpponentPosition);
-      const tiles = reachableTiles(gameMap, nextOpponentPosition.translateByDirection(opponentDirection), 2000, [
-        myHeadPosition,
-        nextCoordinate,
-        nextCoordinate.translateByDirection(direction),
-        nextCoordinate.translateByDirection(direction).translateByDirection(direction),
-        nextOpponentPosition,
-      ]);
-      console.log(tiles);
-      if (tiles < 200) {
-        const factor = 1 + 200 / tiles / 100;
-        console.log('cornering possible in two steps, adjusting by', factor);
-        score = score * factor;
-      }
-    }
-  });
-
-  // Look ahead three steps
-  switch (gameMap.getTileType(nextCoordinate.translateByDirection(direction).translateByDirection(direction))) {
-    case TileType.Food:
-      console.log('food close by, adjusting by ', adjust(FOOD_FACTOR, 3));
-      score = adjust(FOOD_FACTOR, 3);
-      break;
-    case TileType.Obstacle:
-      console.log('obstacle close by, adjusting by ', adjust(OBSTACLE_FACTOR, 3));
-      score = score * adjust(OBSTACLE_FACTOR, 3);
-      break;
-    case TileType.Snake:
-      console.log('snake close by, adjusting by ', adjust(SNAKE_FACTOR, 3));
-      score = score * adjust(SNAKE_FACTOR, 3);
-      break;
+  for (direction of possibleNextMoves) {
+    score =
+      score +
+      (NEXT_TICK_FACTOR *
+        scoreDirection(nextGameMap, direction, opponents, depth + 1, `${prefix}${direction.charAt(0)}`)) /
+        possibleNextMoves.length;
   }
 
   return score;
@@ -167,6 +136,7 @@ let previousScore = 0;
 export async function getNextMove(gameMap: GameMap): Promise<Direction> {
   console.log('...................................................');
   console.log('Computing move for tick', gameMap.gameTick);
+  console.log('Current head position', gameMap.playerSnake.headCoordinate);
   const startTime = performance.now();
   //Filters safe directions to move in
   let possibleMoves = allDirections.filter((direction) => gameMap.playerSnake.canMoveInDirection(direction));
@@ -193,7 +163,7 @@ export async function getNextMove(gameMap: GameMap): Promise<Direction> {
   }
 
   const moveScore = possibleMoves
-    .map((direction) => ({ score: scoreDirection(gameMap, direction, opponents), direction }))
+    .map((direction) => ({ score: scoreDirection(gameMap, direction, opponents, 0, direction.charAt(0)), direction }))
     .sort((a, b) => b.score - a.score);
   console.log('scores', moveScore);
 
@@ -218,7 +188,3 @@ export function onMessage(message: Message) {
 }
 
 export const trainingGameSettings = {} as GameSettings;
-
-//TODO:
-// Todo calculate available tiles in the next step!
-// Score each tile depending on if it can be reached by opponent
