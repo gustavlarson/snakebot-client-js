@@ -46,19 +46,19 @@ const SNAKE_FACTOR = 0.85;
 
 const NEXT_TICK_FACTOR = 0.5;
 
-const MAX_DEPTH = 3;
-
 const log = (prefix: string, msg: any, ...arg: any[]) => {
   console.log(`${prefix} ${msg}`, arg);
 };
 
-const scoreDirection: (gameMap: GameMap, direction: Direction, depth: number, prefix: string) => number = (
-  gameMap,
-  direction,
-  depth,
-  prefix = '',
-) => {
-  if (depth > MAX_DEPTH) {
+const scoreDirection: (
+  gameMap: GameMap,
+  direction: Direction,
+  depth: number,
+  maxDepth: number,
+  prefix: string,
+  panicMode: boolean,
+) => number = (gameMap, direction, depth, maxDepth, prefix = '', panicMode) => {
+  if (depth > maxDepth) {
     return 0;
   }
 
@@ -73,6 +73,9 @@ const scoreDirection: (gameMap: GameMap, direction: Direction, depth: number, pr
 
   let score = reachableTiles(gameMap, nextCoordinate, availableTiles / 2);
   log(prefix, 'base score', direction, nextCoordinate, score);
+  if (panicMode && score > availableTiles / 3) {
+    return score;
+  }
 
   const opponents: Snake[] = [];
   gameMap.snakes.forEach((snake) => {
@@ -114,7 +117,7 @@ const scoreDirection: (gameMap: GameMap, direction: Direction, depth: number, pr
   opponents.forEach((opponent) => {
     const distance = nextCoordinate.euclidianDistanceTo(opponent.headCoordinate);
     if (distance < 5) {
-      const factor = distance / 5;
+      const factor = distance / 5 + 0.000001;
       log(prefix, 'head close by, adjusting by factor', factor);
       score = score * factor;
     }
@@ -146,7 +149,8 @@ const scoreDirection: (gameMap: GameMap, direction: Direction, depth: number, pr
   for (direction of possibleNextMoves) {
     score =
       score +
-      (NEXT_TICK_FACTOR * scoreDirection(nextGameMap, direction, depth + 1, `${prefix}${direction.charAt(0)}`)) /
+      (NEXT_TICK_FACTOR *
+        scoreDirection(nextGameMap, direction, depth + 1, maxDepth, `${prefix}${direction.charAt(0)}`, panicMode)) /
         possibleNextMoves.length;
   }
 
@@ -176,19 +180,38 @@ export async function getNextMove(gameMap: GameMap): Promise<Direction> {
     });
   }
 
-  if (possibleMoves.length > 1) {
-    const moveScore = possibleMoves
-      .map((direction) => ({ score: scoreDirection(gameMap, direction, 0, direction.charAt(0)), direction }))
-      .sort((a, b) => b.score - a.score);
-    console.log('scores', moveScore);
-
-    const endTime = performance.now();
-    console.log('computation time: ', endTime - startTime);
-    previousScore = moveScore[0].score; //TODO move this out of if statement
-    return moveScore[0].direction;
+  let maxDepth = 0;
+  let panicMode = false;
+  if (possibleMoves.length === 1) {
+    maxDepth = 1;
   } else {
-    return possibleMoves[0]; //We do not have a choice, so why waste time scoring directions? :)
+    const reachableTileCount = possibleMoves.map((direction) =>
+      reachableTiles(gameMap, gameMap.playerSnake().headCoordinate.translateByDirection(direction), 100),
+    );
+    if (reachableTileCount.reduce((acc, curr) => acc + curr, 0) < 100) {
+      maxDepth = 20;
+      panicMode = true;
+    } else {
+      if (possibleMoves.length === 2) {
+        maxDepth = 5;
+      } else if (possibleMoves.length === 3) {
+        maxDepth = 3;
+      }
+    }
   }
+  console.log('MAX DEPTH', maxDepth);
+  const moveScore = possibleMoves
+    .map((direction) => ({
+      score: scoreDirection(gameMap, direction, 0, maxDepth, direction.charAt(0), panicMode),
+      direction,
+    }))
+    .sort((a, b) => b.score - a.score);
+  console.log('scores', moveScore);
+
+  const endTime = performance.now();
+  console.log('computation time: ', endTime - startTime);
+  previousScore = moveScore[0].score;
+  return moveScore[0].direction;
 }
 
 export function onMessage(message: Message) {
