@@ -1,8 +1,8 @@
 import { strict as assert } from 'assert';
-import { getNextMove, reachableTiles } from '../snakepit/bot';
+import { getNextMove, reachableTiles } from '../snakepit/big';
 import { Direction } from '../src/types';
 import { Coordinate, GameMap } from '../src/utils';
-import { settings, test1, test2, test3, test4, test5, test6 } from './data';
+import { settings, test1, test5, test6, test7 } from './data';
 
 describe('Reachable tiles', () => {
   it('Basic case', () => {
@@ -18,11 +18,10 @@ describe('Reachable tiles', () => {
     assert.equal(1343, reachableTiles(map, head.translateByDirection(Direction.Up), 5000));
     assert.equal(10, reachableTiles(map, head.translateByDirection(Direction.Left), 5000));
 
-    const nextMap = map.clone();
-    nextMap.setPlayerSnakeHead(head.translateByDirection(Direction.Left));
+    const nextMap = map.predictNextGamemapState(Direction.Left);
     assert.equal(
       9,
-      reachableTiles(nextMap, nextMap.playerSnake.headCoordinate.translateByDirection(Direction.Left), 5000),
+      reachableTiles(nextMap, nextMap.playerSnake().headCoordinate.translateByDirection(Direction.Left), 5000),
     );
   });
 
@@ -32,11 +31,23 @@ describe('Reachable tiles', () => {
     assert.equal(1213, reachableTiles(map, head.translateByDirection(Direction.Left), 5000));
     assert.equal(9, reachableTiles(map, head.translateByDirection(Direction.Right), 5000));
   });
+
+  it('Regression 3', () => {
+    const map = new GameMap(test7, 'd699105e-a974-451a-b23e-659f33c58057', settings, test7.worldTick);
+    const head = map.playerSnake().headCoordinate;
+    assert.equal(1, reachableTiles(map, head.translateByDirection(Direction.Up), 5000));
+    assert.equal(1465, reachableTiles(map, head.translateByDirection(Direction.Down), 5000));
+  });
 });
 
 describe('Situations', () => {
   it('situation 1', () => {
     const map = new GameMap(test1, '01f1a3c9-e695-422f-897f-602f8ecd7b78', settings, test1.worldTick);
+    return getNextMove(map).then((result) => assert.equal(Direction.Down, result));
+  });
+
+  it('situation 2', () => {
+    const map = new GameMap(test7, 'd699105e-a974-451a-b23e-659f33c58057', settings, test7.worldTick);
     return getNextMove(map).then((result) => assert.equal(Direction.Down, result));
   });
 });

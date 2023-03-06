@@ -1,6 +1,10 @@
 import { Direction, RawMap, RelativeDirection, SnakeInfo, TileType } from './types';
 import { GameSettings } from './types';
 
+import _ from 'lodash';
+
+const allDirections = Object.values(Direction);
+
 /**
  * Converts a direction to a representation in coordinates.
  * @param direction A direction to convert to corresponding delta coordinates
@@ -180,10 +184,19 @@ export class Snake {
   direction: Direction;
   coordinates: Coordinate[];
   map: GameMap;
+  tailProtectedForGameTicks: number;
 
-  constructor(id: string, name: string, direction: Direction, coordinates: Coordinate[], map: GameMap) {
+  constructor(
+    id: string,
+    name: string,
+    tailProtectedForGameTicks: number,
+    direction: Direction,
+    coordinates: Coordinate[],
+    map: GameMap,
+  ) {
     this.id = id;
     this.name = name;
+    this.tailProtectedForGameTicks = tailProtectedForGameTicks;
     this.direction = direction;
     this.coordinates = coordinates;
     this.map = map;
@@ -248,7 +261,7 @@ export class Snake {
   }
 
   static fromSnakeInfo(snakeInfo: SnakeInfo, mapWidth: number, map: GameMap) {
-    const { id, name, positions } = snakeInfo;
+    const { id, name, positions, tailProtectedForGameTicks } = snakeInfo;
     const coordinates = positions.map((position) => Coordinate.fromPosition(position, mapWidth));
     // Calculate the direction of the snake
     let direction = Direction.Up;
@@ -264,7 +277,7 @@ export class Snake {
         direction = Direction.Up;
       }
     }
-    return new Snake(id, name, direction, coordinates, map);
+    return new Snake(id, name, tailProtectedForGameTicks, direction, coordinates, map);
   }
 }
 
@@ -276,7 +289,7 @@ export class GameMap {
   tiles: Map<number, TileType>;
   gameSettings: GameSettings;
   gameTick: number;
-  occupiedTiles: number;
+  occupiedTilesCount: number;
 
   constructor(map: RawMap, playerId: string, gameSettings: GameSettings, gameTick: number) {
     const snakes = new Map<string, Snake>();
@@ -308,18 +321,12 @@ export class GameMap {
     this.tiles = tiles;
     this.gameSettings = gameSettings;
     this.gameTick = gameTick;
-    this.occupiedTiles = occupiedTiles;
+    this.occupiedTilesCount = occupiedTiles;
   }
 
-  get playerSnake() {
-    return this.snakes.get(this.playerId)!;
-  }
+  playerSnake = () => this.snakes.get(this.playerId)!;
 
-  /**
-   * @param coordinate Coordinate to check
-   * @return Type of tile
-   */
-  getTileType(coordinate: Coordinate) {
+  getTileType = (coordinate: Coordinate) => {
     const { width, height } = this;
 
     if (coordinate.isOutOfBounds(width, height)) {
@@ -330,42 +337,22 @@ export class GameMap {
     const tileType = this.tiles.get(position);
 
     if (tileType === undefined) {
-      // console.error(`No tile found at position ${position}`);
       return TileType.Empty;
     }
 
     return tileType;
-  }
-  /**
-   * @param coordinate Coordinate to check
-   * @return True if coordinate is empty or food
-   */
-  isTileFree(coordinate: Coordinate) {
-    return this.getTileType(coordinate) === TileType.Empty || this.getTileType(coordinate) === TileType.Food;
-  }
+  };
 
-  clone(): GameMap {
-    return new GameMapClone(
-      this.playerId,
-      this.width,
-      this.height,
-      this.snakes,
-      this.tiles,
-      this.gameSettings,
-      this.gameTick,
-      this.occupiedTiles,
-    );
-  }
+  isTileFree = (coordinate: Coordinate) =>
+    this.getTileType(coordinate) === TileType.Empty || this.getTileType(coordinate) === TileType.Food;
 
-  setPlayerSnakeHead(coordinate: Coordinate) {
-    console.log('SETTING SNAKE HEAD TO', coordinate);
-    this.tiles.set(coordinate.toPosition(this.width, this.height), TileType.Snake);
-    this.playerSnake.coordinates = [coordinate, ...this.playerSnake.coordinates];
+  predictNextGamemapState(playerMove: Direction): GameMap {
+    return new GameMapPrediction(this, playerMove);
   }
 }
 
-//THIS IS UGLY!!!
-export class GameMapClone {
+// I hate this code :)
+class GameMapPrediction {
   playerId: string;
   width: number;
   height: number;
@@ -373,37 +360,24 @@ export class GameMapClone {
   tiles: Map<number, TileType>;
   gameSettings: GameSettings;
   gameTick: number;
-  occupiedTiles: number;
+  occupiedTilesCount: number;
 
-  constructor(
-    playerId: string,
-    width: number,
-    height: number,
-    snakes: Map<string, Snake>,
-    tiles: Map<number, TileType>,
-    gameSettings: GameSettings,
-    gameTick: number,
-    occupiedTiles: number,
-  ) {
-    this.playerId = playerId;
-    this.width = width;
-    this.height = height;
-    this.snakes = new Map(snakes);
-    this.tiles = new Map(tiles);
-    this.gameSettings = gameSettings;
-    this.gameTick = gameTick;
-    this.occupiedTiles = occupiedTiles;
+  constructor(map: GameMap, direction: Direction) {
+    this.playerId = map.playerId;
+    this.width = map.width;
+    this.height = map.height;
+    this.snakes = _.cloneDeep(map.snakes);
+    this.tiles = _.cloneDeep(map.tiles);
+    this.gameSettings = map.gameSettings;
+    this.gameTick = map.gameTick;
+    this.occupiedTilesCount = map.occupiedTilesCount;
+
+    this.predict(direction);
   }
 
-  get playerSnake() {
-    return this.snakes.get(this.playerId)!;
-  }
+  playerSnake = () => this.snakes.get(this.playerId)!;
 
-  /**
-   * @param coordinate Coordinate to check
-   * @return Type of tile
-   */
-  getTileType(coordinate: Coordinate) {
+  getTileType = (coordinate: Coordinate) => {
     const { width, height } = this;
 
     if (coordinate.isOutOfBounds(width, height)) {
@@ -414,35 +388,74 @@ export class GameMapClone {
     const tileType = this.tiles.get(position);
 
     if (tileType === undefined) {
-      // console.error(`No tile found at position ${position}`);
       return TileType.Empty;
     }
 
     return tileType;
-  }
-  /**
-   * @param coordinate Coordinate to check
-   * @return True if coordinate is empty or food
-   */
-  isTileFree(coordinate: Coordinate) {
-    return this.getTileType(coordinate) === TileType.Empty || this.getTileType(coordinate) === TileType.Food;
+  };
+
+  isTileFree = (coordinate: Coordinate) =>
+    this.getTileType(coordinate) === TileType.Empty || this.getTileType(coordinate) === TileType.Food;
+
+  predictNextGamemapState(playerMove: Direction): GameMap {
+    return new GameMapPrediction(this, playerMove);
   }
 
-  clone(): GameMap {
-    return new GameMapClone(
-      this.playerId,
-      this.width,
-      this.height,
-      this.snakes,
-      this.tiles,
-      this.gameSettings,
-      this.gameTick,
-      this.occupiedTiles,
-    );
-  }
+  predict(playerMove: Direction): void {
+    // Predict next state!
+    const spontaneousGrowth =
+      this.gameSettings.spontaneousGrowthEveryNWorldTick !== 0 &&
+      this.gameTick % this.gameSettings.spontaneousGrowthEveryNWorldTick === 0;
 
-  setPlayerSnakeHead(coordinate: Coordinate) {
-    this.tiles.set(coordinate.toPosition(this.width, this.height), TileType.Snake);
-    this.playerSnake.coordinates = [coordinate, ...this.playerSnake.coordinates];
+    this.gameTick = this.gameTick + 1;
+
+    if (spontaneousGrowth) {
+      console.log('Spontaneous growth tick ', this.gameTick);
+    }
+
+    const opponents: Snake[] = [];
+    this.snakes.forEach((snake) => {
+      if (snake.headCoordinate !== undefined && snake.id !== this.playerId) {
+        opponents.push(snake);
+      }
+    });
+    const tails = opponents.map((snake) => snake.tailCoordinate);
+
+    // Move player snake
+    const newPlayerHead = this.playerSnake().headCoordinate.translateByDirection(playerMove);
+    const foodAtPosition = this.tiles.get(newPlayerHead.toPosition(this.width, this.height)) === TileType.Food;
+    const tailNibble = tails.includes(newPlayerHead);
+    const shouldGrow = foodAtPosition || spontaneousGrowth || tailNibble;
+
+    this.tiles.set(newPlayerHead.toPosition(this.width, this.height), TileType.Snake);
+    this.playerSnake().coordinates = [newPlayerHead, ...this.playerSnake().coordinates.slice(0, shouldGrow ? 0 : -1)];
+    if (shouldGrow) {
+      this.occupiedTilesCount++;
+    }
+
+    // Move opponent snakes
+    this.snakes.forEach((snake) => {
+      if (snake.id !== this.playerId && snake.headCoordinate !== undefined) {
+        const possibleDirections = allDirections.filter((direction) => snake.canMoveInDirection(direction));
+        if (possibleDirections.length > 0) {
+          let nextMove: Direction = snake.direction;
+          if (!possibleDirections.includes(snake.direction)) {
+            nextMove = possibleDirections[0]; //TODO should this be smarter??
+          }
+          const newHead = snake.headCoordinate.translateByDirection(nextMove);
+          const foodAtPosition = this.tiles.get(newHead.toPosition(this.width, this.height)) === TileType.Food;
+          const shouldGrow = foodAtPosition || spontaneousGrowth;
+
+          this.tiles.set(newHead.toPosition(this.width, this.height), TileType.Snake);
+          snake.coordinates = [newHead, ...snake.coordinates.slice(0, shouldGrow ? 0 : -1)];
+          if (shouldGrow) {
+            this.occupiedTilesCount++;
+          }
+        } else {
+          // Snake died!!
+          snake.coordinates = [];
+        }
+      }
+    });
   }
 }

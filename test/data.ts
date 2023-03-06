@@ -368,3 +368,51 @@ export const test6 = {
     1211, 1212, 1256, 1257, 1258, 1302, 1303, 1304,
   ],
 };
+
+export const test7 = {
+  width: 46,
+  height: 34,
+  worldTick: 35,
+  snakeInfos: [
+    {
+      name: 'Big',
+      points: 12,
+      positions: [1242, 1243, 1197, 1151, 1150, 1104, 1058, 1012, 966, 967, 1013, 1059, 1060],
+      tailProtectedForGameTicks: 0,
+      id: 'd699105e-a974-451a-b23e-659f33c58057',
+    },
+    {
+      name: 'Snakey',
+      points: 14,
+      positions: [979, 978, 977, 931, 885, 886, 887, 888, 889, 890, 891, 892, 938],
+      tailProtectedForGameTicks: 0,
+      id: 'aa310f6c-e1fa-42a3-8ca2-aea245d0d08d',
+    },
+    {
+      name: 'Snakey',
+      points: 15,
+      positions: [586, 585, 584, 583, 582, 581, 580, 579, 578, 532, 531, 530, 529, 528],
+      tailProtectedForGameTicks: 0,
+      id: 'cc7af706-5e0d-46c5-88ba-e0e23a61bbde',
+    },
+    {
+      name: 'StraightBot',
+      points: 12,
+      positions: [696, 650, 604, 558, 512, 466, 420, 374, 328, 282, 236, 190, 144],
+      tailProtectedForGameTicks: 0,
+      id: '051a40a9-9938-4cdc-9479-d5bf2466e16d',
+    },
+    {
+      name: 'StraightBot',
+      points: 12,
+      positions: [899, 853, 807, 761, 715, 669, 623, 577, 576, 622, 668, 714, 760],
+      tailProtectedForGameTicks: 0,
+      id: 'f1388a6b-41df-4555-aa08-3356376583fa',
+    },
+  ],
+  foodPositions: [150, 213, 326, 643, 1112],
+  obstaclePositions: [
+    7, 8, 9, 53, 54, 55, 99, 100, 101, 618, 619, 620, 664, 665, 666, 701, 702, 710, 711, 712, 747, 748, 802, 803, 804,
+    848, 849, 850, 863, 894, 895, 896,
+  ],
+};

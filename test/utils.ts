@@ -225,7 +225,7 @@ describe('Map', () => {
     // Check that the snake is correct
     const snake = Snake.fromSnakeInfo(snake1Info, map.width, map);
     assert.deepEqual(map.snakes.get(snake1Info.id), snake);
-    assert.equal(map.playerSnake, map.snakes.get(snake1Info.id));
+    assert.equal(map.playerSnake(), map.snakes.get(snake1Info.id));
   });
 
   it('check tiletype', () => {
@@ -257,21 +257,23 @@ describe('Map', () => {
   });
 
   describe('Snake', () => {
-    const snake = map.playerSnake;
+    const snake = map.playerSnake();
     it('snake added to map', () => {
       assert.deepEqual(
         snake,
         new Snake(
           snake1Info.id,
           snake1Info.name,
+          snake1Info.tailProtectedForGameTicks,
           Direction.Left,
-          snake1Info.positions.map(absPos => Coordinate.fromPosition(absPos, map.width)),
+          snake1Info.positions.map((absPos) => Coordinate.fromPosition(absPos, map.width)),
           map,
         ),
       );
 
       assert.equal(snake.id, snake1Info.id);
       assert.equal(snake.name, snake1Info.name);
+      assert.equal(snake.tailProtectedForGameTicks, snake1Info.tailProtectedForGameTicks);
       assert.equal(snake.direction, Direction.Left);
       assert.deepEqual(snake.coordinates, [new Coordinate(0, 0), new Coordinate(1, 0)]);
       assert.equal(snake.map, map); // Check same map reference
