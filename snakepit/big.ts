@@ -121,8 +121,8 @@ const scoreDirection: (
   // Adjust score if we have other snakes close by
   opponents.forEach((opponent) => {
     const distance = nextCoordinate.manhattanDistanceTo(opponent.headCoordinate);
-    if (distance < 5) {
-      const factor = distance / 5 + 0.000001;
+    if (distance < 8) {
+      const factor = distance / 8 + 0.000001;
       debug(prefix, 'head close by, adjusting by factor', factor);
       score = score * factor;
     }
