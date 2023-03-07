@@ -34,20 +34,19 @@ export const reachableTiles: (gameMap: GameMap, move: Coordinate, limit: number)
   return visited.size;
 };
 
-const calculateAvailableTiles: (gameMap: GameMap) => number = (gameMap) => {
-  const totalTiles = gameMap.width * gameMap.height;
-  return totalTiles - gameMap.occupiedTilesCount;
-};
-
 const TAIL_NIBBLE_FACTOR = 1.5;
 const FOOD_FACTOR = 1.2;
 const OBSTACLE_FACTOR = 0.9;
 const SNAKE_FACTOR = 0.85;
+const SNAKE_HEAD_FACTOR = 0.5;
 
 const NEXT_TICK_FACTOR = 0.5;
 
 const log = (prefix: string, msg: any, ...arg: any[]) => {
-  console.log(`${prefix} ${msg}`, arg);
+  //console.log(`${prefix} ${msg}`, arg);
+};
+const debug = (prefix: string, msg: any, ...arg: any[]) => {
+  //console.debug(`${prefix} ${msg}`, arg);
 };
 
 const scoreDirection: (
@@ -64,16 +63,18 @@ const scoreDirection: (
 
   const myHeadPosition = gameMap.playerSnake().headCoordinate;
   const nextCoordinate = myHeadPosition.translateByDirection(direction);
-  console.log('Current coordinate, next coordinate', myHeadPosition, nextCoordinate);
+  debug(prefix, 'Current coordinate, next coordinate', myHeadPosition, nextCoordinate);
 
   if (nextCoordinate.isOutOfBounds(gameMap.width, gameMap.height)) {
     return 0;
   }
-  const availableTiles = calculateAvailableTiles(gameMap);
+  const availableTiles = gameMap.availableTilesCount();
 
-  let score = reachableTiles(gameMap, nextCoordinate, availableTiles / 2);
-  log(prefix, 'base score', direction, nextCoordinate, score);
-  if (panicMode && score > availableTiles / 3) {
+  const tilesToSearch = availableTiles / (depth > 3 ? 4 : 2);
+
+  let score = reachableTiles(gameMap, nextCoordinate, tilesToSearch);
+  debug(prefix, 'base score', direction, nextCoordinate, score);
+  if (panicMode && score >= tilesToSearch - 1) {
     return score;
   }
 
@@ -87,15 +88,16 @@ const scoreDirection: (
   const opponentTails = opponents
     .filter((snake) => snake.tailProtectedForGameTicks === 0)
     .map((snake) => snake.tailCoordinate);
+  const opponentHeads = opponents.map((snake) => snake.headCoordinate);
 
   // Adjust score if we have food on the tile
   if (gameMap.getTileType(nextCoordinate) === TileType.Food) {
-    log(prefix, 'food on tile, adjusting by ', FOOD_FACTOR);
+    debug(prefix, 'food on tile, adjusting by ', FOOD_FACTOR);
     score = score * FOOD_FACTOR;
   }
   // Adjust if we can tail nibble
   else if (opponentTails.includes(nextCoordinate)) {
-    log(prefix, 'tail nibble possible, adjusting by ', TAIL_NIBBLE_FACTOR);
+    debug(prefix, 'tail nibble possible, adjusting by ', TAIL_NIBBLE_FACTOR);
     score = score * TAIL_NIBBLE_FACTOR;
   }
 
@@ -103,28 +105,36 @@ const scoreDirection: (
   const twoAheadCoordinate = nextCoordinate.translateByDirection(direction);
   const twoAheadTileType = gameMap.getTileType(twoAheadCoordinate);
   if (twoAheadTileType === TileType.Obstacle) {
-    log(prefix, 'obstacle two steps ahead, adjusting by ', OBSTACLE_FACTOR);
+    debug(prefix, 'obstacle two steps ahead, adjusting by ', OBSTACLE_FACTOR);
     score = score * OBSTACLE_FACTOR;
   } else if (opponentTails.includes(twoAheadCoordinate)) {
-    log(prefix, 'tail nibble possible, adjusting by ', TAIL_NIBBLE_FACTOR);
+    debug(prefix, 'tail nibble possible, adjusting by ', TAIL_NIBBLE_FACTOR);
     score = score * TAIL_NIBBLE_FACTOR;
+  } else if (opponentHeads.includes(twoAheadCoordinate)) {
+    debug(prefix, 'snake head two steps ahead, adjusting by ', SNAKE_HEAD_FACTOR);
+    score = score * SNAKE_FACTOR;
   } else if (twoAheadTileType === TileType.Snake) {
-    log(prefix, 'snake two steps ahead, adjusting by ', SNAKE_FACTOR);
+    debug(prefix, 'snake two steps ahead, adjusting by ', SNAKE_FACTOR);
     score = score * SNAKE_FACTOR;
   }
 
   // Adjust score if we have other snakes close by
   opponents.forEach((opponent) => {
-    const distance = nextCoordinate.euclidianDistanceTo(opponent.headCoordinate);
+    const distance = nextCoordinate.manhattanDistanceTo(opponent.headCoordinate);
     if (distance < 5) {
       const factor = distance / 5 + 0.000001;
-      log(prefix, 'head close by, adjusting by factor', factor);
+      debug(prefix, 'head close by, adjusting by factor', factor);
       score = score * factor;
     }
   });
 
   // Predict how the next state of the gamemap will look
   const nextGameMap = gameMap.predictNextGamemapState(direction);
+
+  if (nextGameMap.playerSnake().coordinates.length === 0) {
+    //We died
+    return 0;
+  }
 
   // Adjust score if we can corner a opponent
   opponents
@@ -136,8 +146,8 @@ const scoreDirection: (
 
       const tiles = reachableTiles(nextGameMap, nextOpponentPosition, 200);
       if (tiles < 200) {
-        const factor = 1 + 200 / tiles / 50;
-        log(prefix, 'cornering possible, adjusting by', factor);
+        const factor = 1 + 200 / (tiles + 1) / 5;
+        debug(prefix, 'cornering possible, adjusting by', factor);
         score = score * factor;
       }
     });
@@ -146,12 +156,13 @@ const scoreDirection: (
     nextGameMap.playerSnake().canMoveInDirection(direction),
   );
 
-  for (direction of possibleNextMoves) {
-    score =
-      score +
-      (NEXT_TICK_FACTOR *
-        scoreDirection(nextGameMap, direction, depth + 1, maxDepth, `${prefix}${direction.charAt(0)}`, panicMode)) /
-        possibleNextMoves.length;
+  if (possibleNextMoves.length > 0) {
+    const scores = possibleNextMoves.map((direction) =>
+      scoreDirection(nextGameMap, direction, depth + 1, maxDepth, `${prefix}${direction.charAt(0)}`, panicMode),
+    );
+    scores.sort((a, b) => b - a);
+
+    score = score + scores[0] * NEXT_TICK_FACTOR;
   }
 
   return score;
@@ -189,6 +200,12 @@ export async function getNextMove(gameMap: GameMap): Promise<Direction> {
       reachableTiles(gameMap, gameMap.playerSnake().headCoordinate.translateByDirection(direction), 100),
     );
     if (reachableTileCount.reduce((acc, curr) => acc + curr, 0) < 100) {
+      maxDepth = 10;
+      panicMode = true;
+    } else if (reachableTileCount.reduce((acc, curr) => acc + curr, 0) < 50) {
+      maxDepth = 15;
+      panicMode = true;
+    } else if (reachableTileCount.reduce((acc, curr) => acc + curr, 0) < 25) {
       maxDepth = 20;
       panicMode = true;
     } else {

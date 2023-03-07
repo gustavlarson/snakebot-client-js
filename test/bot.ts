@@ -2,7 +2,7 @@ import { strict as assert } from 'assert';
 import { getNextMove, reachableTiles } from '../snakepit/big';
 import { Direction } from '../src/types';
 import { Coordinate, GameMap } from '../src/utils';
-import { settings, test1, test5, test6, test7 } from './data';
+import { settings, test1, test5, test6, test7, test8, test9 } from './data';
 
 describe('Reachable tiles', () => {
   it('Basic case', () => {
@@ -49,5 +49,15 @@ describe('Situations', () => {
   it('situation 2', () => {
     const map = new GameMap(test7, 'd699105e-a974-451a-b23e-659f33c58057', settings, test7.worldTick);
     return getNextMove(map).then((result) => assert.equal(Direction.Down, result));
+  });
+
+  it('situation 3', () => {
+    const map = new GameMap(test8, 'b674f195-6b8c-4952-be13-4341e6aef0f6', settings, test8.worldTick);
+    return getNextMove(map).then((result) => assert.equal(Direction.Up, result));
+  });
+
+  it('situation 4', () => {
+    const map = new GameMap(test9, '3ada7837-0041-4a93-a880-460d1f5a808b', settings, test9.worldTick);
+    return getNextMove(map).then((result) => assert.equal(Direction.Up, result));
   });
 });

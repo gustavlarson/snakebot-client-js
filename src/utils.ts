@@ -326,6 +326,11 @@ export class GameMap {
 
   playerSnake = () => this.snakes.get(this.playerId)!;
 
+  availableTilesCount = () => {
+    const totalTiles = this.width * this.height;
+    return totalTiles - this.occupiedTilesCount;
+  };
+
   getTileType = (coordinate: Coordinate) => {
     const { width, height } = this;
 
@@ -367,6 +372,9 @@ class GameMapPrediction {
     this.width = map.width;
     this.height = map.height;
     this.snakes = _.cloneDeep(map.snakes);
+    this.snakes.forEach((snake) => {
+      snake.map = this;
+    });
     this.tiles = _.cloneDeep(map.tiles);
     this.gameSettings = map.gameSettings;
     this.gameTick = map.gameTick;
@@ -376,6 +384,11 @@ class GameMapPrediction {
   }
 
   playerSnake = () => this.snakes.get(this.playerId)!;
+
+  availableTilesCount = () => {
+    const totalTiles = this.width * this.height;
+    return totalTiles - this.occupiedTilesCount;
+  };
 
   getTileType = (coordinate: Coordinate) => {
     const { width, height } = this;
@@ -409,10 +422,6 @@ class GameMapPrediction {
 
     this.gameTick = this.gameTick + 1;
 
-    if (spontaneousGrowth) {
-      console.log('Spontaneous growth tick ', this.gameTick);
-    }
-
     const opponents: Snake[] = [];
     this.snakes.forEach((snake) => {
       if (snake.headCoordinate !== undefined && snake.id !== this.playerId) {
@@ -427,15 +436,16 @@ class GameMapPrediction {
     const tailNibble = tails.includes(newPlayerHead);
     const shouldGrow = foodAtPosition || spontaneousGrowth || tailNibble;
 
-    this.tiles.set(newPlayerHead.toPosition(this.width, this.height), TileType.Snake);
-    this.playerSnake().coordinates = [newPlayerHead, ...this.playerSnake().coordinates.slice(0, shouldGrow ? 0 : -1)];
-    if (shouldGrow) {
-      this.occupiedTilesCount++;
-    }
-
+    let playerDied = false;
     // Move opponent snakes
     this.snakes.forEach((snake) => {
       if (snake.id !== this.playerId && snake.headCoordinate !== undefined) {
+        if (newPlayerHead.euclidianDistanceTo(snake.headCoordinate) === 0) {
+          snake.coordinates = [];
+          this.playerSnake().coordinates = [];
+          playerDied = true;
+          return;
+        }
         const possibleDirections = allDirections.filter((direction) => snake.canMoveInDirection(direction));
         if (possibleDirections.length > 0) {
           let nextMove: Direction = snake.direction;
@@ -443,6 +453,15 @@ class GameMapPrediction {
             nextMove = possibleDirections[0]; //TODO should this be smarter??
           }
           const newHead = snake.headCoordinate.translateByDirection(nextMove);
+
+          // Oops
+          if (newHead.euclidianDistanceTo(newPlayerHead) === 0) {
+            snake.coordinates = [];
+            this.playerSnake().coordinates = [];
+            playerDied = true;
+            return;
+          }
+
           const foodAtPosition = this.tiles.get(newHead.toPosition(this.width, this.height)) === TileType.Food;
           const shouldGrow = foodAtPosition || spontaneousGrowth;
 
@@ -453,7 +472,21 @@ class GameMapPrediction {
           }
         } else {
           // Snake died!!
+          this.occupiedTilesCount -= snake.coordinates.length;
+          snake.coordinates.forEach((coord) =>
+            this.tiles.set(coord.toPosition(this.width, this.height), TileType.Empty),
+          );
           snake.coordinates = [];
+        }
+      }
+      if (!playerDied) {
+        this.tiles.set(newPlayerHead.toPosition(this.width, this.height), TileType.Snake);
+        this.playerSnake().coordinates = [
+          newPlayerHead,
+          ...this.playerSnake().coordinates.slice(0, shouldGrow ? 0 : -1),
+        ];
+        if (shouldGrow) {
+          this.occupiedTilesCount++;
         }
       }
     });

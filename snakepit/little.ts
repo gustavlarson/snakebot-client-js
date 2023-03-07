@@ -33,7 +33,7 @@ const scoreDirection: (gameMap: GameMap, direction: Direction, snakeHeads: Coord
   direction,
   snakeHeads,
 ) => {
-  const myHeadPosition = gameMap.playerSnake.headCoordinate;
+  const myHeadPosition = gameMap.playerSnake().headCoordinate;
   const nextCoordinate = myHeadPosition.translateByDirection(direction);
 
   let score = reachableTiles(gameMap, nextCoordinate);
@@ -84,7 +84,7 @@ const scoreDirection: (gameMap: GameMap, direction: Direction, snakeHeads: Coord
 
 export async function getNextMove(gameMap: GameMap): Promise<Direction> {
   //Filters safe directions to move in
-  let possibleMoves = allDirections.filter((direction) => gameMap.playerSnake.canMoveInDirection(direction));
+  let possibleMoves = allDirections.filter((direction) => gameMap.playerSnake().canMoveInDirection(direction));
 
   // If there are no safe moves, bad luck!
   if (possibleMoves.length === 0) {

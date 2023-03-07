@@ -31,7 +31,10 @@ import type {
 
 const HEARTBEAT_INTERVAL = 5000;
 const SUPPORTED_GAME_MODES = new Set(Object.values(GameMode));
-export let snakeConsole = { log: (msg: any, ...arg: any[]) => console.log(msg, arg) } as unknown as Console;
+export let snakeConsole = {
+  log: (msg: any, ...arg: any[]) => console.log(msg, arg),
+  debug: (msg: any, ...arg: any[]) => console.debug(msg, arg),
+} as unknown as Console;
 
 export type SnakeImplementation = {
   getNextMove: (gameMap: GameMap) => Promise<Direction>;
