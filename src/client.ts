@@ -32,8 +32,8 @@ import type {
 const HEARTBEAT_INTERVAL = 5000;
 const SUPPORTED_GAME_MODES = new Set(Object.values(GameMode));
 export let snakeConsole = {
-  log: (msg: any, ...arg: any[]) => console.log(msg, arg),
-  debug: (msg: any, ...arg: any[]) => console.debug(msg, arg),
+  //log: (msg: any, ...arg: any[]) => console.log(msg, arg),
+  //debug: (msg: any, ...arg: any[]) => console.debug(msg, arg),
 } as unknown as Console;
 
 export type SnakeImplementation = {
@@ -207,11 +207,30 @@ export function createClient({
       if (gameMode === GameMode.Tournament && !spoiler) {
         logger.info(colors.yellow(`Disabling logs to prevent spoilers`));
         logger = {
-          log: () => {},
+          Console: console.Console,
+          log: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
           error: logger.error,
           warn: logger.warn,
-          info: () => {},
-        } as Console;
+          info: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          assert: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          time: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          clear: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          count: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          debug: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          countReset: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          dir: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          dirxml: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          group: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          groupCollapsed: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          groupEnd: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          table: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          timeEnd: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          timeLog: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          trace: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          profile: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          profileEnd: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+          timeStamp: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+        };
 
         // Prevent the snake from logging
         snakeConsole = logger;
@@ -248,7 +267,7 @@ export function createClient({
 
   async function mapUpdateEvent({ map, receivingPlayerId, gameId, gameTick, timestamp }: MapUpdateEventMessage) {
     // logger.debug(`Game turn #${gameTick}`);
-    logger.debug(JSON.stringify(map));
+    //logger.debug(JSON.stringify(map));
     const gameMap = new GameMap(map, receivingPlayerId, gameSettings, gameTick);
     const direction = await snake.getNextMove(gameMap);
     sendMessage(createRegisterMoveMessage(direction, receivingPlayerId, gameId, gameTick));
