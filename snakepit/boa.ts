@@ -4,6 +4,7 @@ import { MessageType } from '../src/messages';
 import { GameSettings, Direction, TileType } from '../src/types';
 import type { GameStartingEventMessage, Message, SnakeDeadEventMessage } from '../src/types_messages';
 import { performance } from 'perf_hooks';
+import { RelativeDirection } from '../src/types';
 
 const allDirections = Object.values(Direction);
 
@@ -37,11 +38,13 @@ export const reachableTiles: (gameMap: GameMap, move: Coordinate, limit: number)
 const TAIL_NIBBLE_FACTOR = 1.5;
 const FOOD_FACTOR = 1.2;
 const OBSTACLE_FACTOR = 0.9;
-const SNAKE_FACTOR = 0.85;
+const SNAKE_PARALLEL_FACTOR = 0.85;
+const SNAKE_FACTOR = 0.75;
 const SNAKE_HEAD_FACTOR = 0.5;
-const MAX_COMPUTATION_TIME = 180;
+const POSSIBLE_COLLISION_ADJUSTMENT = 0.5;
+const MAX_COMPUTATION_TIME = 170;
 
-const NEXT_TICK_FACTOR = 0.5;
+const NEXT_TICK_FACTOR = 0.6;
 
 const log = (prefix: string, msg: any, ...arg: any[]) => {
   console.log(`${prefix} ${msg}`, arg);
@@ -68,17 +71,23 @@ const scoreDirection: (
   }
 
   const myHeadPosition = gameMap.playerSnake().headCoordinate;
+  if (myHeadPosition === undefined || myHeadPosition === null) {
+    return 0;
+  }
   const nextCoordinate = myHeadPosition.translateByDirection(direction);
   //debug(prefix, 'Current coordinate, next coordinate', myHeadPosition, nextCoordinate);
 
-  if (nextCoordinate.isOutOfBounds(gameMap.width, gameMap.height)) {
+  if (myHeadPosition.isOutOfBounds(gameMap.width, gameMap.height)) {
+    return 0;
+  }
+  if (gameMap.getTileType(myHeadPosition) === TileType.Obstacle) {
     return 0;
   }
   const availableTiles = gameMap.availableTilesCount();
 
   const tilesToSearch = availableTiles / (depth > 3 ? 4 : 2);
 
-  let score = reachableTiles(gameMap, nextCoordinate, tilesToSearch);
+  let score = reachableTiles(gameMap, myHeadPosition, tilesToSearch);
   //debug(prefix, 'base score', direction, nextCoordinate, score);
   if (panicMode && score >= tilesToSearch - 1) {
     return score;
@@ -106,27 +115,39 @@ const scoreDirection: (
     //debug(prefix, 'tail nibble possible, adjusting by ', TAIL_NIBBLE_FACTOR);
     score = score * TAIL_NIBBLE_FACTOR;
   }
+  /*
+  const leftTile = gameMap.getTileType(
+    nextCoordinate.translateByDirection(gameMap.playerSnake().relativeToAbsolute(RelativeDirection.Left)),
+  );
+  const rightTile = gameMap.getTileType(
+    nextCoordinate.translateByDirection(gameMap.playerSnake().relativeToAbsolute(RelativeDirection.Right)),
+  );
+  if (leftTile === TileType.Obstacle || leftTile === TileType.Snake) {
+    score = score * SNAKE_PARALLEL_FACTOR;
+  }
+  if (rightTile === TileType.Obstacle || rightTile === TileType.Snake) {
+    score = score * SNAKE_PARALLEL_FACTOR;
+  }*/
 
   // Two steps ahead
-  const twoAheadCoordinate = nextCoordinate.translateByDirection(direction);
-  const twoAheadTileType = gameMap.getTileType(twoAheadCoordinate);
-  if (twoAheadTileType === TileType.Obstacle) {
+  const nextCoordinateTileType = gameMap.getTileType(nextCoordinate);
+  if (nextCoordinateTileType === TileType.Obstacle) {
     // debug(prefix, 'obstacle two steps ahead, adjusting by ', OBSTACLE_FACTOR);
     score = score * OBSTACLE_FACTOR;
-  } else if (opponentTails.includes(twoAheadCoordinate)) {
+  } else if (opponentTails.includes(nextCoordinate)) {
     // debug(prefix, 'tail nibble possible, adjusting by ', TAIL_NIBBLE_FACTOR);
     score = score * TAIL_NIBBLE_FACTOR;
-  } else if (opponentHeads.includes(twoAheadCoordinate)) {
+  } else if (opponentHeads.includes(nextCoordinate)) {
     // debug(prefix, 'snake head two steps ahead, adjusting by ', SNAKE_HEAD_FACTOR);
-    score = score * SNAKE_FACTOR;
-  } else if (twoAheadTileType === TileType.Snake) {
+    score = score * SNAKE_HEAD_FACTOR;
+  } else if (nextCoordinateTileType === TileType.Snake) {
     //  debug(prefix, 'snake two steps ahead, adjusting by ', SNAKE_FACTOR);
     score = score * SNAKE_FACTOR;
   }
 
   // Adjust score if we have other snakes close by
   opponents.forEach((opponent) => {
-    const distance = nextCoordinate.manhattanDistanceTo(opponent.headCoordinate);
+    const distance = myHeadPosition.manhattanDistanceTo(opponent.headCoordinate);
     if (distance < 8) {
       const factor = distance / 8 + 0.000001;
       // debug(prefix, 'head close by, adjusting by factor', factor);
@@ -135,39 +156,43 @@ const scoreDirection: (
   });
 
   // Predict how the next state of the gamemap will look
-  const nextGameMap = gameMap.predictNextGamemapState(direction);
+  /*const nextGameMap = gameMap.predictNextGamemapState(direction);
 
   if (nextGameMap.playerSnake().coordinates.length === 0) {
     //We died
     return 0;
+  }*/
+
+  // Adjust score if we can corner a opponent. Skip in panic mode, time consuming.
+  if (!panicMode) {
+    const nonStockholmSnakesAlive = opponents.filter((s) => !s.name.startsWith('STO')).length > 0;
+    opponents
+      .filter((snake) => snake.coordinates.length > 0)
+      .filter((s) => nonStockholmSnakesAlive && !s.name.startsWith('STO'))
+      .forEach((opponent) => {
+        const opponentDirection =
+          allDirections.find((direction) => opponent.canMoveInDirection(direction)) ?? Direction.Down;
+        const nextOpponentPosition = opponent.headCoordinate.translateByDirection(opponentDirection);
+        let limit = depth < 3 ? 200 : 100;
+        if (depth > 4) {
+          limit = 25;
+        }
+
+        const tiles = reachableTiles(gameMap, nextOpponentPosition, limit);
+        if (tiles < limit) {
+          const factor = 1 + limit / (tiles + 1) / 2.5;
+          // debug(prefix, 'cornering possible, adjusting by', factor);
+          score = score * factor;
+        }
+      });
   }
 
-  // Adjust score if we can corner a opponent
-  const nonStockholmSnakesAlive = opponents.filter((s) => !s.name.startsWith('STO')).length > 0;
-  opponents
-    .filter((snake) => snake.coordinates.length > 0)
-    .filter((s) => nonStockholmSnakesAlive && !s.name.startsWith('STO'))
-    .forEach((opponent) => {
-      const opponentDirection =
-        allDirections.find((direction) => opponent.canMoveInDirection(direction)) ?? Direction.Down;
-      const nextOpponentPosition = opponent.headCoordinate.translateByDirection(opponentDirection);
-
-      const tiles = reachableTiles(nextGameMap, nextOpponentPosition, 200);
-      if (tiles < 200) {
-        const factor = 1 + 200 / (tiles + 1) / 5;
-        // debug(prefix, 'cornering possible, adjusting by', factor);
-        score = score * factor;
-      }
-    });
-
-  const possibleNextMoves = allDirections.filter((direction) =>
-    nextGameMap.playerSnake().canMoveInDirection(direction),
-  );
+  const possibleNextMoves = allDirections.filter((direction) => gameMap.playerSnake().canMoveInDirection(direction));
 
   if (possibleNextMoves.length > 0) {
     const scores = possibleNextMoves.map((direction) =>
       scoreDirection(
-        nextGameMap,
+        gameMap.predictNextGamemapState(direction),
         direction,
         depth + 1,
         maxDepth,
@@ -178,7 +203,13 @@ const scoreDirection: (
     );
     scores.sort((a, b) => b - a);
 
-    score = score + scores[0] * NEXT_TICK_FACTOR;
+    score =
+      score +
+      scores
+        .map((score, index) => {
+          return score * (NEXT_TICK_FACTOR / (1 + index * 1.5));
+        })
+        .reduce((previous, current) => previous + current, 0);
   }
 
   return score;
@@ -213,16 +244,16 @@ export async function getNextMove(gameMap: GameMap): Promise<Direction> {
     maxDepth = 1;
   } else {
     const reachableTileCount = possibleMoves.map((direction) =>
-      reachableTiles(gameMap, gameMap.playerSnake().headCoordinate.translateByDirection(direction), 100),
+      reachableTiles(gameMap, gameMap.playerSnake().headCoordinate.translateByDirection(direction), 200),
     );
-    if (reachableTileCount.reduce((acc, curr) => acc + curr, 0) < 100) {
-      maxDepth = 15;
+    if (reachableTileCount.reduce((acc, curr) => acc + curr, 0) < 25) {
+      maxDepth = 50;
       panicMode = true;
     } else if (reachableTileCount.reduce((acc, curr) => acc + curr, 0) < 50) {
-      maxDepth = 20;
-      panicMode = true;
-    } else if (reachableTileCount.reduce((acc, curr) => acc + curr, 0) < 25) {
       maxDepth = 30;
+      panicMode = true;
+    } else if (reachableTileCount.reduce((acc, curr) => acc + curr, 0) < 200) {
+      maxDepth = 20;
       panicMode = true;
     } else {
       if (possibleMoves.length === 2) {
@@ -232,19 +263,55 @@ export async function getNextMove(gameMap: GameMap): Promise<Direction> {
       }
     }
   }
-  //console.log('MAX DEPTH', maxDepth);
+
+  const opponents: Snake[] = [];
+  gameMap.snakes.forEach((snake) => {
+    if (snake.headCoordinate !== undefined && snake.id !== gameMap.playerId) {
+      opponents.push(snake);
+    }
+  });
+
+  const opponentCount = opponents.length;
+
+  if (opponentCount < 3 && possibleMoves.length > 1) {
+    maxDepth = maxDepth + 1;
+  }
+
+  const possibleOpponentCoordinates: Coordinate[] = opponents.flatMap((snake) => {
+    const possibleNextMoves = allDirections.filter((direction) => snake.canMoveInDirection(direction));
+
+    return possibleNextMoves.map((move) => snake.headCoordinate.translateByDirection(move));
+  });
+
+  console.log('MAX DEPTH', maxDepth);
   const abortTime = startTime + MAX_COMPUTATION_TIME;
   const moveScore = possibleMoves
-    .map((direction) => ({
-      score: scoreDirection(gameMap, direction, 0, maxDepth, direction.charAt(0), panicMode, abortTime),
-      direction,
-    }))
+    .map((direction) => {
+      const possibleCollision: boolean =
+        possibleOpponentCoordinates.find(
+          (c) => c.manhattanDistanceTo(gameMap.playerSnake().headCoordinate.translateByDirection(direction)) === 0,
+        ) !== undefined;
+      return {
+        score:
+          scoreDirection(
+            gameMap.predictNextGamemapState(direction),
+            direction,
+            0,
+            maxDepth,
+            direction.charAt(0),
+            panicMode,
+            abortTime,
+          ) * (possibleCollision ? POSSIBLE_COLLISION_ADJUSTMENT : 1),
+        direction,
+      };
+    })
     .sort((a, b) => b.score - a.score);
-  //console.log('scores', moveScore);
+  console.log('scores', moveScore);
 
   const endTime = performance.now();
   console.log('computation time: ', endTime - startTime);
   previousScore = moveScore[0].score;
+  console.log('Move', moveScore[0].direction);
   return moveScore[0].direction;
 }
 
@@ -261,7 +328,9 @@ export function onMessage(message: Message) {
   }
 }
 
-export const trainingGameSettings = {} as GameSettings;
+export const trainingGameSettings = {
+  maxNoofPlayers: 7,
+} as GameSettings;
 
 //TODO:
 // - Dynamicly adjust search depth depending on possible moves, reachable tiles

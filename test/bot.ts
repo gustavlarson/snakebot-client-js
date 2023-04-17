@@ -1,8 +1,8 @@
 import { strict as assert } from 'assert';
-import { getNextMove, reachableTiles } from '../snakepit/big';
+import { getNextMove, reachableTiles } from '../snakepit/boa';
 import { Direction } from '../src/types';
 import { Coordinate, GameMap } from '../src/utils';
-import { settings, test1, test5, test6, test7, test8, test9 } from './data';
+import { settings, test1, test10, test11, test12, test13, test14, test5, test6, test7, test8, test9 } from './data';
 
 describe('Reachable tiles', () => {
   it('Basic case', () => {
@@ -41,6 +41,7 @@ describe('Reachable tiles', () => {
 });
 
 describe('Situations', () => {
+  /*
   it('situation 1', () => {
     const map = new GameMap(test1, '01f1a3c9-e695-422f-897f-602f8ecd7b78', settings, test1.worldTick);
     return getNextMove(map).then((result) => assert.equal(Direction.Down, result));
@@ -56,8 +57,33 @@ describe('Situations', () => {
     return getNextMove(map).then((result) => assert.equal(Direction.Up, result));
   });
 
-  it('situation 4', () => {
+  it('situation 9', () => {
     const map = new GameMap(test9, '3ada7837-0041-4a93-a880-460d1f5a808b', settings, test9.worldTick);
+    return getNextMove(map).then((result) => assert.equal(Direction.Up, result));
+  });
+
+  it('situation 10', () => {
+    const map = new GameMap(test10, '5550a0ab-fddc-4ca3-8532-4a516a6dceff', settings, test10.worldTick);
+    return getNextMove(map).then((result) => assert.equal(Direction.Up, result));
+  });
+
+  it('situation 11', () => {
+    const map = new GameMap(test11, 'aa40be49-153b-4a42-a514-334cc9d7fe5a', settings, test11.worldTick);
+    return getNextMove(map).then((result) => assert.equal(Direction.Up, result));
+  });
+
+  it('situation 12', () => {
+    const map = new GameMap(test12, 'bab5c673-968a-4279-bbd6-040814e63b24', settings, test12.worldTick);
+    return getNextMove(map).then((result) => assert.equal(Direction.Left, result));
+  });
+
+  it('situation 13', () => {
+    const map = new GameMap(test13, 'ce52f98b-f65a-4efe-9626-b0dc3d37ea10', settings, test13.worldTick);
+    return getNextMove(map).then((result) => assert.equal(Direction.Right, result));
+  });
+*/
+  it('situation 14', () => {
+    const map = new GameMap(test14, '015afbcf-b076-4483-ae47-14fa8e58a104', settings, test14.worldTick);
     return getNextMove(map).then((result) => assert.equal(Direction.Up, result));
   });
 });

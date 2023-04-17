@@ -31,10 +31,34 @@ import type {
 
 const HEARTBEAT_INTERVAL = 5000;
 const SUPPORTED_GAME_MODES = new Set(Object.values(GameMode));
-export let snakeConsole = {
-  //log: (msg: any, ...arg: any[]) => console.log(msg, arg),
-  //debug: (msg: any, ...arg: any[]) => console.debug(msg, arg),
-} as unknown as Console;
+export let snakeConsole: Console = {
+  Console: console.Console,
+  log: (...arg) => console.log(arg),
+  //log: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  error: () => {},
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  warn: () => {},
+  info: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  assert: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  time: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  clear: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  count: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  debug: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  countReset: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  dir: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  dirxml: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  group: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  groupCollapsed: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  groupEnd: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  table: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  timeEnd: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  timeLog: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  trace: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  profile: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  profileEnd: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  timeStamp: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+};
 
 export type SnakeImplementation = {
   getNextMove: (gameMap: GameMap) => Promise<Direction>;
