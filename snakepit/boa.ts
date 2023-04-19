@@ -6,7 +6,7 @@ import type { GameStartingEventMessage, Message, SnakeDeadEventMessage } from '.
 import { performance } from 'perf_hooks';
 import { RelativeDirection } from '../src/types';
 
-const allDirections = Object.values(Direction);
+let allDirections = Object.values(Direction);
 
 export const reachableTiles: (gameMap: GameMap, move: Coordinate, limit: number) => number = (gameMap, move, limit) => {
   if (move.isOutOfBounds(gameMap.width, gameMap.height)) {
@@ -36,15 +36,15 @@ export const reachableTiles: (gameMap: GameMap, move: Coordinate, limit: number)
 };
 
 const TAIL_NIBBLE_FACTOR = 1.5;
-const FOOD_FACTOR = 1.2;
+const FOOD_FACTOR = 1.3;
 const OBSTACLE_FACTOR = 0.9;
 const SNAKE_PARALLEL_FACTOR = 0.85;
-const SNAKE_FACTOR = 0.75;
-const SNAKE_HEAD_FACTOR = 0.5;
-const POSSIBLE_COLLISION_ADJUSTMENT = 0.5;
-const MAX_COMPUTATION_TIME = 170;
+const SNAKE_FACTOR = 0.8;
+const SNAKE_HEAD_FACTOR = 0.7;
+const POSSIBLE_COLLISION_ADJUSTMENT = 0.25;
+const MAX_COMPUTATION_TIME = 200;
 
-const NEXT_TICK_FACTOR = 0.6;
+const NEXT_TICK_FACTOR = 0.7;
 
 const log = (prefix: string, msg: any, ...arg: any[]) => {
   console.log(`${prefix} ${msg}`, arg);
@@ -61,33 +61,34 @@ const scoreDirection: (
   prefix: string,
   panicMode: boolean,
   abortTime: number,
-) => number = (gameMap, direction, depth, maxDepth, prefix = '', panicMode, abortTime) => {
+  previousTileType: TileType,
+) => number = (gameMap, direction, depth, maxDepth, prefix = '', panicMode, abortTime, previousTileType) => {
   if (depth > maxDepth) {
     return 0;
   }
   if (performance.now() > abortTime) {
-    log(prefix, 'Calculation reached time limit');
+    //log(prefix, 'Calculation reached time limit');
     return 0;
   }
 
-  const myHeadPosition = gameMap.playerSnake().headCoordinate;
-  if (myHeadPosition === undefined || myHeadPosition === null) {
+  const currentCoordinate = gameMap.playerSnake().headCoordinate;
+  if (currentCoordinate === undefined || currentCoordinate === null) {
     return 0;
   }
-  const nextCoordinate = myHeadPosition.translateByDirection(direction);
+  const nextCoordinate = currentCoordinate.translateByDirection(direction);
   //debug(prefix, 'Current coordinate, next coordinate', myHeadPosition, nextCoordinate);
 
-  if (myHeadPosition.isOutOfBounds(gameMap.width, gameMap.height)) {
+  if (currentCoordinate.isOutOfBounds(gameMap.width, gameMap.height)) {
     return 0;
   }
-  if (gameMap.getTileType(myHeadPosition) === TileType.Obstacle) {
+  if (gameMap.getTileType(currentCoordinate) === TileType.Obstacle) {
     return 0;
   }
   const availableTiles = gameMap.availableTilesCount();
 
   const tilesToSearch = availableTiles / (depth > 3 ? 4 : 2);
 
-  let score = reachableTiles(gameMap, myHeadPosition, tilesToSearch);
+  let score = reachableTiles(gameMap, currentCoordinate, tilesToSearch);
   //debug(prefix, 'base score', direction, nextCoordinate, score);
   if (panicMode && score >= tilesToSearch - 1) {
     return score;
@@ -106,12 +107,12 @@ const scoreDirection: (
   const opponentHeads = opponents.map((snake) => snake.headCoordinate);
 
   // Adjust score if we have food on the tile
-  if (gameMap.getTileType(nextCoordinate) === TileType.Food) {
-    //debug(prefix, 'food on tile, adjusting by ', FOOD_FACTOR);
+  if (previousTileType === TileType.Food) {
+    //log(prefix, 'food on tile, adjusting by ', FOOD_FACTOR);
     score = score * FOOD_FACTOR;
   }
   // Adjust if we can tail nibble
-  else if (opponentTails.includes(nextCoordinate)) {
+  else if (opponentTails.includes(currentCoordinate)) {
     //debug(prefix, 'tail nibble possible, adjusting by ', TAIL_NIBBLE_FACTOR);
     score = score * TAIL_NIBBLE_FACTOR;
   }
@@ -147,9 +148,9 @@ const scoreDirection: (
 
   // Adjust score if we have other snakes close by
   opponents.forEach((opponent) => {
-    const distance = myHeadPosition.manhattanDistanceTo(opponent.headCoordinate);
-    if (distance < 8) {
-      const factor = distance / 8 + 0.000001;
+    const distance = currentCoordinate.manhattanDistanceTo(opponent.headCoordinate);
+    if (distance < 5) {
+      const factor = distance / 5 + 0.000001;
       // debug(prefix, 'head close by, adjusting by factor', factor);
       score = score * factor;
     }
@@ -199,6 +200,7 @@ const scoreDirection: (
         `${prefix}${direction.charAt(0)}`,
         panicMode,
         abortTime,
+        gameMap.getTileType(gameMap.playerSnake().headCoordinate.translateByDirection(direction)),
       ),
     );
     scores.sort((a, b) => b - a);
@@ -215,28 +217,34 @@ const scoreDirection: (
   return score;
 };
 
-let previousScore = 0;
 export async function getNextMove(gameMap: GameMap): Promise<Direction> {
-  console.log('...................................................');
-  console.log('Computing move for tick', gameMap.gameTick);
+  //console.log('...................................................');
+  //console.log('Computing move for tick', gameMap.gameTick);
   //console.log('Current head position', gameMap.playerSnake().headCoordinate);
   const startTime = performance.now();
-  //Filters safe directions to move in
-  let possibleMoves = allDirections.filter((direction) => gameMap.playerSnake().canMoveInDirection(direction));
 
-  // If there are no safe moves, bad luck!
-  if (possibleMoves.length === 0) {
-    return Direction.Down;
-  }
-
-  // Act more random if the previous score is high (lot's of space)
-  const freeTiles = gameMap.width * gameMap.height - gameMap.occupiedTilesCount;
-  if (previousScore > freeTiles / 3) {
-    //console.log('Score is high, acting random');
-    possibleMoves = possibleMoves.sort(function (a, b) {
+  if (gameMap.gameTick % 2 === 0) {
+    allDirections = Object.values(Direction).sort(function (a, b) {
       return 0.5 - Math.random();
     });
   }
+
+  //Filters safe directions to move in
+  const possibleMoves = allDirections.filter((direction) => gameMap.playerSnake().canMoveInDirection(direction));
+
+  // If there are no safe moves, bad luck!
+  if (possibleMoves.length === 0) {
+    return allDirections[0];
+  }
+
+  // Act more random if the previous score is high (lot's of space)
+  /*const freeTiles = gameMap.width * gameMap.height - gameMap.occupiedTilesCount;
+  if (previousScore > freeTiles * 5) {
+    console.log('Score is high, acting random');
+    possibleMoves = possibleMoves.sort(function (a, b) {
+      return 0.5 - Math.random();
+    });
+  }*/
 
   let maxDepth = 0;
   let panicMode = false;
@@ -257,7 +265,7 @@ export async function getNextMove(gameMap: GameMap): Promise<Direction> {
       panicMode = true;
     } else {
       if (possibleMoves.length === 2) {
-        maxDepth = 6;
+        maxDepth = 5;
       } else if (possibleMoves.length === 3) {
         maxDepth = 4;
       }
@@ -283,7 +291,7 @@ export async function getNextMove(gameMap: GameMap): Promise<Direction> {
     return possibleNextMoves.map((move) => snake.headCoordinate.translateByDirection(move));
   });
 
-  console.log('MAX DEPTH', maxDepth);
+  //console.log('MAX DEPTH', maxDepth);
   const abortTime = startTime + MAX_COMPUTATION_TIME;
   const moveScore = possibleMoves
     .map((direction) => {
@@ -301,17 +309,17 @@ export async function getNextMove(gameMap: GameMap): Promise<Direction> {
             direction.charAt(0),
             panicMode,
             abortTime,
+            gameMap.getTileType(gameMap.playerSnake().headCoordinate.translateByDirection(direction)),
           ) * (possibleCollision ? POSSIBLE_COLLISION_ADJUSTMENT : 1),
         direction,
       };
     })
     .sort((a, b) => b.score - a.score);
-  console.log('scores', moveScore);
+  //console.log('scores', moveScore);
 
   const endTime = performance.now();
-  console.log('computation time: ', endTime - startTime);
-  previousScore = moveScore[0].score;
-  console.log('Move', moveScore[0].direction);
+  //console.log('computation time: ', endTime - startTime);
+  //console.log('Move', moveScore[0].direction);
   return moveScore[0].direction;
 }
 
